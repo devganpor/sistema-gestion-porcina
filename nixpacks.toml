@@ -2,10 +2,10 @@
 nixPkgs = ['nodejs_18', 'npm-9_x']
 
 [phases.install]
-cmds = ['cd server && npm ci']
+cmds = ['cd server && npm install']
 
 [phases.build]
-cmds = ['cd server && npm run migrate:pg']
+cmds = ['echo "No build step needed"']
 
 [start]
-cmd = 'cd server && npm start'
+cmd = 'cd server && npm run railway:start'

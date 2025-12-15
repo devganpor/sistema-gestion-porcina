@@ -4,11 +4,7 @@
   "description": "Sistema integral de gestión para finca porcina de ciclo completo",
   "main": "server/index.js",
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "cd server && npm run dev",
-    "client": "cd client && npm start",
-    "build": "echo 'Build handled by nixpacks.toml'",
-    "install-all": "npm install && cd server && npm install && cd ../client && npm install"
+    "start": "cd server && npm start"
   },
   "keywords": ["porcicultura", "gestión", "granja", "agricultura"],
   "author": "Sistema Gestión Porcina",
