@@ -7,7 +7,7 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd server && npm run dev",
     "client": "cd client && npm start",
-    "build": "cd server && npm run migrate:pg",
+    "build": "echo 'Build handled by nixpacks.toml'",
     "install-all": "npm install && cd server && npm install && cd ../client && npm install"
   },
   "keywords": ["porcicultura", "gestión", "granja", "agricultura"],
