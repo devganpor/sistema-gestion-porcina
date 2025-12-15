@@ -9,7 +9,8 @@
     "migrate": "node scripts/migrate.js",
     "migrate:pg": "node scripts/migrate-pg.js",
     "build": "npm run migrate:pg",
-    "railway:start": "npm run migrate:pg && npm start",
+    "railway:start": "node run-migration.js && npm start",
+    "migrate:manual": "node run-migration.js",
     "test": "jest",
     "lint": "eslint .",
     "security-audit": "npm audit"
