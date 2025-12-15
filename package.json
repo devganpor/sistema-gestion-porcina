@@ -2,7 +2,10 @@
   "name": "sistema-gestion-porcina",
   "version": "1.0.0",
   "scripts": {
-    "build": "echo 'No build needed'",
-    "start": "cd server && npm run railway:start"
+    "build": "echo 'Server-only deployment'",
+    "start": "cd server && npm start"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }
