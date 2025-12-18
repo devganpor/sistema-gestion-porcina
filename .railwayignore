@@ -1,5 +1,12 @@
-client-app/
 node_modules/
 *.log
 .env
 .git/
+docs/
+*.md
+*.bat
+*.sh
+server/logs/
+server/backups/
+server/database.sqlite
+server/sessions.db

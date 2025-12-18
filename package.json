@@ -1,13 +1,11 @@
-@"
 {
   "name": "sistema-gestion-porcina",
   "version": "1.0.0",
   "scripts": {
-    "build": "echo Server-only deployment",
+    "build": "cd client-app && npm ci && npm run build",
     "start": "cd server && npm run railway:start"
   },
   "engines": {
     "node": "18.x"
   }
 }
-"@ | Out-File -FilePath package.json -Encoding utf8
