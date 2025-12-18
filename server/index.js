@@ -4,7 +4,11 @@ const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
+// Solo usar SQLiteStore en desarrollo
+let SQLiteStore;
+if (process.env.NODE_ENV !== 'production') {
+  SQLiteStore = require('connect-sqlite3')(session);
+}
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
@@ -65,8 +69,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Sesión para CSRF
-app.use(session({
-  store: new SQLiteStore({ db: 'sessions.db' }),
+const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'session-secret-key',
   resave: false,
   saveUninitialized: false,
@@ -75,7 +78,14 @@ app.use(session({
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 horas
   },
-}));
+};
+
+// Solo usar SQLiteStore en desarrollo
+if (process.env.NODE_ENV !== 'production' && SQLiteStore) {
+  sessionConfig.store = new SQLiteStore({ db: 'sessions.db' });
+}
+
+app.use(session(sessionConfig));
 
 app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
