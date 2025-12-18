@@ -1,6 +1,7 @@
 const { pool } = require('../config/database-pg');
 
 async function createTables() {
+  console.log('🔍 DATABASE_URL:', process.env.DATABASE_URL);
   const client = await pool.connect();
   
   try {
