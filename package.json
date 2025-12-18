@@ -1,6 +1,6 @@
 {
-  "name": "sistema-gestion-porcina",
-  "version": "1.0.0",
+  "name": "sgp-railway-deploy",
+  "version": "1.0.1",
   "scripts": {
     "build": "echo 'Server-only deployment'",
     "start": "cd server && npm start"
