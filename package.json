@@ -1,11 +1,11 @@
-{
-  "name": "sgp-railway-deploy",
-  "version": "1.0.1",
+echo '{
+  "name": "sistema-gestion-porcina",
+  "version": "1.0.0",
   "scripts": {
-    "build": "echo 'Server-only deployment'",
-    "start": "cd server && npm start"
+    "build": "echo Server-only deployment",
+    "start": "cd server && npm run railway:start"
   },
   "engines": {
     "node": "18.x"
   }
-}
+}' > package.json
