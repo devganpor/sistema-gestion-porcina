@@ -1,5 +1,11 @@
+[phases.setup]
+nixPkgs = ["nodejs_18"]
+
+[phases.install]
+cmds = ["cd server && npm ci"]
+
 [phases.build]
-cmds = ["cd client-app && npm ci && npm run build"]
+cmds = ["echo 'Build phase completed'"]
 
 [phases.start]
 cmd = "cd server && npm run railway:start"
