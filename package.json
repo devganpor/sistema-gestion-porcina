@@ -1,4 +1,5 @@
-echo '{
+@"
+{
   "name": "sistema-gestion-porcina",
   "version": "1.0.0",
   "scripts": {
@@ -8,4 +9,5 @@ echo '{
   "engines": {
     "node": "18.x"
   }
-}' > package.json
+}
+"@ | Out-File -FilePath package.json -Encoding utf8
