@@ -4,10 +4,14 @@ const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
-// Solo usar SQLiteStore en desarrollo
+// Solo cargar SQLiteStore en desarrollo
 let SQLiteStore;
-if (process.env.NODE_ENV !== 'production') {
-  SQLiteStore = require('connect-sqlite3')(session);
+if (process.env.NODE_ENV !== 'production' && !process.env.DATABASE_URL) {
+  try {
+    SQLiteStore = require('connect-sqlite3')(session);
+  } catch (err) {
+    console.log('SQLite no disponible, usando sesiones en memoria');
+  }
 }
 require('dotenv').config();
 
@@ -80,8 +84,8 @@ const sessionConfig = {
   },
 };
 
-// Solo usar SQLiteStore en desarrollo
-if (process.env.NODE_ENV !== 'production' && SQLiteStore) {
+// Solo usar SQLiteStore en desarrollo local
+if (process.env.NODE_ENV !== 'production' && !process.env.DATABASE_URL && SQLiteStore) {
   sessionConfig.store = new SQLiteStore({ db: 'sessions.db' });
 }
 
