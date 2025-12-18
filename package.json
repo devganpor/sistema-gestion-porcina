@@ -1,8 +1,8 @@
 {
-  "name": "sistema-gestion-porcina",
-  "version": "1.0.0",
+  "name": "sistema-gestion-porcina-server",
+  "version": "1.0.1",
   "scripts": {
-    "build": "echo 'Build completed'",
+    "build": "echo 'Server build completed'",
     "start": "cd server && npm run railway:start"
   },
   "engines": {
