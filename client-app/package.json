@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Frontend del Sistema de Gestión Porcina",
   "scripts": {
-    "start": "react-scripts start",
+    "start": "npx serve -s build -l $PORT",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
@@ -16,6 +16,7 @@
     "axios": "^1.6.2",
     "chart.js": "^4.4.0",
     "react-chartjs-2": "^5.2.0",
+    "serve": "^14.2.0",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
     "typescript": "^4.9.5"

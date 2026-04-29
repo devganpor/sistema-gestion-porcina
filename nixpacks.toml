@@ -1,8 +1,0 @@
-[phases.setup]
-nixPkgs = ["nodejs-18_x"]
-
-[start]
-cmd = "cd server && npm run migrate:pg && node index.js"
-
-[variables]
-NODE_ENV = "production"

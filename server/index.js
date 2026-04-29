@@ -4,10 +4,9 @@ const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
-const path = require('path');
 require('dotenv').config();
 
-// Session store: PostgreSQL en producción, SQLite en desarrollo
+// Session store: SQLite solo en desarrollo
 let sessionStore;
 if (!process.env.DATABASE_URL) {
   const SQLiteStore = require('connect-sqlite3')(session);
@@ -55,10 +54,13 @@ app.use(helmet({
 app.use(compression());
 
 // CORS configurado
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:3000'
+].filter(Boolean);
+
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production'
-    ? true
-    : (process.env.FRONTEND_URL || 'http://localhost:3000'),
+  origin: allowedOrigins,
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -149,15 +151,6 @@ app.use('/api/email', emailRoutes);
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
-
-// Servir frontend en producción
-if (process.env.NODE_ENV === 'production') {
-  const clientBuild = path.join(__dirname, '..', 'client-app', 'build');
-  app.use(express.static(clientBuild));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(clientBuild, 'index.html'));
-  });
-}
 
 // Manejo global de errores
 app.use(errorHandler);

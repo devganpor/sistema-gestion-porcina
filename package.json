@@ -2,16 +2,11 @@
   "name": "sistema-gestion-porcina",
   "version": "1.0.0",
   "description": "Sistema integral de gestión para finca porcina",
+  "private": true,
   "scripts": {
-    "postinstall": "cd server && npm install && cd ../client-app && npm install",
-    "build": "cd client-app && npm run build",
-    "start": "cd server && node index.js",
-    "dev": "cd server && npm run dev",
-    "migrate": "cd server && npm run migrate",
-    "client": "cd client-app && npm start"
-  },
-  "engines": {
-    "node": "18.x"
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client-app && npm start",
+    "install:all": "cd server && npm install && cd ../client-app && npm install"
   },
   "license": "MIT"
 }
