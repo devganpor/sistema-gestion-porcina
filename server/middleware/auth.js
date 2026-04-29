@@ -12,7 +12,7 @@ const authenticateToken = async (req, res, next) => {
   try {
     const secret = process.env.JWT_SECRET || 'secret_key';
     const decoded = jwt.verify(token, secret);
-    const user = await query('SELECT id, nombre, email, rol FROM usuarios WHERE id = ? AND activo = 1', [decoded.userId]);
+    const user = await query('SELECT id, nombre, email, rol FROM usuarios WHERE id = ? AND activo = true', [decoded.userId]);
     
     if (user.rows.length === 0) {
       return res.status(403).json({ error: 'Usuario no válido' });
