@@ -4,8 +4,15 @@ const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
+const path = require('path');
 require('dotenv').config();
+
+// Session store: PostgreSQL en producción, SQLite en desarrollo
+let sessionStore;
+if (!process.env.DATABASE_URL) {
+  const SQLiteStore = require('connect-sqlite3')(session);
+  sessionStore = new SQLiteStore({ db: 'sessions.db' });
+}
 
 const authRoutes = require('./routes/auth');
 const animalsRoutes = require('./routes/animals');
@@ -42,21 +49,16 @@ const limiter = rateLimit({
 
 // Configuración de seguridad
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-    },
-  },
+  contentSecurityPolicy: false,
 }));
 
 app.use(compression());
 
-// CORS configurado de forma restrictiva
+// CORS configurado
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: process.env.NODE_ENV === 'production'
+    ? true
+    : (process.env.FRONTEND_URL || 'http://localhost:3000'),
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -65,17 +67,18 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Sesión para CSRF
-app.use(session({
-  store: new SQLiteStore({ db: 'sessions.db' }),
+const sessionConfig = {
   secret: process.env.SESSION_SECRET || 'session-secret-key',
   resave: false,
   saveUninitialized: false,
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 horas
+    maxAge: 24 * 60 * 60 * 1000,
   },
-}));
+};
+if (sessionStore) sessionConfig.store = sessionStore;
+app.use(session(sessionConfig));
 
 app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
@@ -146,6 +149,15 @@ app.use('/api/email', emailRoutes);
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
+
+// Servir frontend en producción
+if (process.env.NODE_ENV === 'production') {
+  const clientBuild = path.join(__dirname, '..', 'client-app', 'build');
+  app.use(express.static(clientBuild));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientBuild, 'index.html'));
+  });
+}
 
 // Manejo global de errores
 app.use(errorHandler);

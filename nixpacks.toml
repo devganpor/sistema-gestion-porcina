@@ -1,0 +1,19 @@
+[phases.setup]
+nixPkgs = ["nodejs-18_x", "npm-9_x"]
+
+[phases.install]
+cmds = [
+  "cd server && npm install",
+  "cd client-app && npm install"
+]
+
+[phases.build]
+cmds = [
+  "cd client-app && REACT_APP_API_URL=/api npm run build"
+]
+
+[start]
+cmd = "cd server && npm run migrate:pg && node index.js"
+
+[variables]
+NODE_ENV = "production"
