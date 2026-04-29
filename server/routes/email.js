@@ -3,10 +3,10 @@ const router = express.Router();
 const emailService = require('../services/emailService');
 const alertService = require('../services/alertService');
 const userEmailService = require('../services/userEmailService');
-const auth = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 // Test email configuration
-router.post('/test', auth, async (req, res) => {
+router.post('/test', authenticateToken, async (req, res) => {
   try {
     const result = await emailService.testConnection();
     res.json(result);
@@ -16,7 +16,7 @@ router.post('/test', auth, async (req, res) => {
 });
 
 // Send test email
-router.post('/send-test', auth, async (req, res) => {
+router.post('/send-test', authenticateToken, async (req, res) => {
   try {
     const { email } = req.body;
     
@@ -38,7 +38,7 @@ router.post('/send-test', auth, async (req, res) => {
 });
 
 // Send alert email
-router.post('/alert', auth, async (req, res) => {
+router.post('/alert', authenticateToken, async (req, res) => {
   try {
     const { email, title, message, type = 'info' } = req.body;
     
@@ -54,7 +54,7 @@ router.post('/alert', auth, async (req, res) => {
 });
 
 // Send daily report
-router.post('/daily-report', auth, async (req, res) => {
+router.post('/daily-report', authenticateToken, async (req, res) => {
   try {
     const { email } = req.body;
     
@@ -70,7 +70,7 @@ router.post('/daily-report', auth, async (req, res) => {
 });
 
 // Get current alerts
-router.get('/alerts', auth, async (req, res) => {
+router.get('/alerts', authenticateToken, async (req, res) => {
   try {
     const alerts = await alertService.checkReproductiveAlerts();
     res.json({ alerts, count: alerts.length });
@@ -80,7 +80,7 @@ router.get('/alerts', auth, async (req, res) => {
 });
 
 // User management emails
-router.post('/welcome', auth, async (req, res) => {
+router.post('/welcome', authenticateToken, async (req, res) => {
   try {
     const { email, name, tempPassword } = req.body;
     
@@ -95,7 +95,7 @@ router.post('/welcome', auth, async (req, res) => {
   }
 });
 
-router.post('/password-reset', auth, async (req, res) => {
+router.post('/password-reset', authenticateToken, async (req, res) => {
   try {
     const { email, name, resetToken } = req.body;
     
@@ -110,7 +110,7 @@ router.post('/password-reset', auth, async (req, res) => {
   }
 });
 
-router.post('/account-deactivated', auth, async (req, res) => {
+router.post('/account-deactivated', authenticateToken, async (req, res) => {
   try {
     const { email, name, reason } = req.body;
     
@@ -125,7 +125,7 @@ router.post('/account-deactivated', auth, async (req, res) => {
   }
 });
 
-router.post('/role-changed', auth, async (req, res) => {
+router.post('/role-changed', authenticateToken, async (req, res) => {
   try {
     const { email, name, newRole, changedBy } = req.body;
     
