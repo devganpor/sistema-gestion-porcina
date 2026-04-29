@@ -1,4 +1,4 @@
-const { query } = require('./config/database-auto');
+const { query } = require('./config/database');
 
 async function checkTables() {
   try {

@@ -1,5 +1,5 @@
 const express = require('express');
-const { query } = require('../config/database-auto');
+const { query } = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();

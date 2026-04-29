@@ -1,4 +1,4 @@
-const { query } = require('../config/database-auto');
+const { query } = require('../config/database');
 const emailService = require('./emailService');
 
 class AlertService {

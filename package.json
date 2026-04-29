@@ -1,11 +1,20 @@
 {
-  "name": "sistema-gestion-porcina-server",
-  "version": "2.0.1",
+  "name": "sistema-gestion-porcina",
+  "version": "1.0.0",
+  "description": "Sistema integral de gestión para finca porcina de ciclo completo",
   "scripts": {
-    "build": "cd server && npm install",
-    "start": "cd server && npm run railway:start"
+    "start": "cd server && node index.js",
+    "dev": "cd server && npm run dev",
+    "install:server": "cd server && npm install",
+    "install:client": "cd client-app && npm install",
+    "install:all": "npm run install:server && npm run install:client",
+    "migrate": "cd server && npm run migrate",
+    "client": "cd client-app && npm start",
+    "build:client": "cd client-app && npm run build"
   },
   "engines": {
-    "node": "18.x"
-  }
+    "node": ">=16.0.0"
+  },
+  "keywords": ["gestion", "porcina", "granja", "cerdos"],
+  "license": "MIT"
 }
