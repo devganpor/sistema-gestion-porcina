@@ -1,5 +1,5 @@
 const express = require('express');
-const { query } = require('../config/database');
+const { query } = require('../config/database-auto');
 const { authenticateToken } = require('../middleware/auth');
 const { asyncHandler, AppError } = require('../middleware/errorHandler');
 
