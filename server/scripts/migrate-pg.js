@@ -198,53 +198,43 @@ async function createTables() {
 
     console.log('✅ Tablas creadas exitosamente');
 
-    // Migrar columna 'ubicacion_id' -> 'ubicacion_actual_id' si existe la versión antigua
+    // === MIGRACIONES DE COLUMNAS (ejecutar antes de índices) ===
     await client.query(`
       DO $$ BEGIN
-        IF EXISTS (
-          SELECT 1 FROM information_schema.columns
-          WHERE table_name='animales' AND column_name='ubicacion_id'
-        ) AND NOT EXISTS (
-          SELECT 1 FROM information_schema.columns
-          WHERE table_name='animales' AND column_name='ubicacion_actual_id'
-        ) THEN
-          ALTER TABLE animales RENAME COLUMN ubicacion_id TO ubicacion_actual_id;
-        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ubicaciones' AND column_name='capacidad')
+        AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ubicaciones' AND column_name='capacidad_maxima')
+        THEN ALTER TABLE ubicaciones RENAME COLUMN capacidad TO capacidad_maxima; END IF;
       END $$;
     `);
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='animales' AND column_name='ubicacion_id')
+        AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='animales' AND column_name='ubicacion_actual_id')
+        THEN ALTER TABLE animales RENAME COLUMN ubicacion_id TO ubicacion_actual_id; END IF;
+      END $$;
+    `);
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eventos_sanitarios' AND column_name='fecha_evento')
+        AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eventos_sanitarios' AND column_name='fecha')
+        THEN ALTER TABLE eventos_sanitarios RENAME COLUMN fecha_evento TO fecha; END IF;
+      END $$;
+    `);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='animales' AND column_name='fecha_salida')
+        THEN ALTER TABLE animales ADD COLUMN fecha_salida DATE; END IF;
+      END $$;
+    `);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='animales' AND column_name='motivo_salida')
+        THEN ALTER TABLE animales ADD COLUMN motivo_salida VARCHAR(255); END IF;
+      END $$;
+    `);
+    console.log('✅ Migraciones de columnas completadas');
 
-    // Agregar columnas faltantes si no existen
-    await client.query(`
-      DO $$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='animales' AND column_name='fecha_salida') THEN
-          ALTER TABLE animales ADD COLUMN fecha_salida DATE;
-        END IF;
-      END $$;
-    `);
-    await client.query(`
-      DO $$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='animales' AND column_name='motivo_salida') THEN
-          ALTER TABLE animales ADD COLUMN motivo_salida VARCHAR(255);
-        END IF;
-      END $$;
-    `);
-
-    // Migrar columna 'fecha_evento' -> 'fecha' en eventos_sanitarios
-    await client.query(`
-      DO $$ BEGIN
-        IF EXISTS (
-          SELECT 1 FROM information_schema.columns
-          WHERE table_name='eventos_sanitarios' AND column_name='fecha_evento'
-        ) AND NOT EXISTS (
-          SELECT 1 FROM information_schema.columns
-          WHERE table_name='eventos_sanitarios' AND column_name='fecha'
-        ) THEN
-          ALTER TABLE eventos_sanitarios RENAME COLUMN fecha_evento TO fecha;
-        END IF;
-      END $$;
-    `);
-
-    // Índices para mejorar rendimiento
+    // === ÍNDICES ===
     await client.query(`CREATE INDEX IF NOT EXISTS idx_animales_estado ON animales(estado)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_animales_categoria ON animales(categoria)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_animales_sexo ON animales(sexo)`);
@@ -255,7 +245,6 @@ async function createTables() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_ingresos_fecha ON ingresos(fecha)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_vacunaciones_animal ON vacunaciones(animal_id)`);
-
     console.log('✅ Índices creados exitosamente');
     console.log('📊 Insertando datos iniciales...');
 
