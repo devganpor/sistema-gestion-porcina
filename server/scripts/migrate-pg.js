@@ -198,6 +198,52 @@ async function createTables() {
 
     console.log('✅ Tablas creadas exitosamente');
 
+    // Migrar columna 'ubicacion_id' -> 'ubicacion_actual_id' si existe la versión antigua
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='animales' AND column_name='ubicacion_id'
+        ) AND NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='animales' AND column_name='ubicacion_actual_id'
+        ) THEN
+          ALTER TABLE animales RENAME COLUMN ubicacion_id TO ubicacion_actual_id;
+        END IF;
+      END $$;
+    `);
+
+    // Agregar columnas faltantes si no existen
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='animales' AND column_name='fecha_salida') THEN
+          ALTER TABLE animales ADD COLUMN fecha_salida DATE;
+        END IF;
+      END $$;
+    `);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='animales' AND column_name='motivo_salida') THEN
+          ALTER TABLE animales ADD COLUMN motivo_salida VARCHAR(255);
+        END IF;
+      END $$;
+    `);
+
+    // Migrar columna 'fecha_evento' -> 'fecha' en eventos_sanitarios
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='eventos_sanitarios' AND column_name='fecha_evento'
+        ) AND NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='eventos_sanitarios' AND column_name='fecha'
+        ) THEN
+          ALTER TABLE eventos_sanitarios RENAME COLUMN fecha_evento TO fecha;
+        END IF;
+      END $$;
+    `);
+
     // Índices para mejorar rendimiento
     await client.query(`CREATE INDEX IF NOT EXISTS idx_animales_estado ON animales(estado)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_animales_categoria ON animales(categoria)`);
