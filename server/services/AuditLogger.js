@@ -1,187 +1,142 @@
-const fs = require('fs');
-const path = require('path');
+const { query } = require('../config/database-auto');
+
+// Mapeo de rutas a módulos legibles
+const MODULO_MAP = {
+  '/api/animals':      'Animales',
+  '/api/reproduction': 'Reproducción',
+  '/api/weights':      'Pesajes',
+  '/api/health':       'Sanidad',
+  '/api/finance':      'Finanzas',
+  '/api/locations':    'Ubicaciones',
+  '/api/nutrition':    'Nutrición',
+  '/api/genealogy':    'Genealogía',
+  '/api/users':        'Usuarios',
+  '/api/auth':         'Autenticación',
+  '/api/reports':      'Reportes',
+};
+
+function detectarModulo(ruta) {
+  for (const [prefix, nombre] of Object.entries(MODULO_MAP)) {
+    if (ruta.startsWith(prefix)) return nombre;
+  }
+  return 'Sistema';
+}
+
+function detectarDescripcion(method, ruta, body) {
+  const modulo = detectarModulo(ruta);
+  const id = ruta.match(/\/(\d+)/)?.[1];
+
+  if (ruta.includes('/auth/login'))  return 'Inicio de sesión';
+  if (ruta.includes('/auth/logout')) return 'Cierre de sesión';
+  if (ruta.includes('/bulk'))        return `Carga masiva en ${modulo}`;
+  if (ruta.includes('/movimiento'))  return `Traslado de animal`;
+  if (ruta.includes('/trazabilidad'))return `Consulta trazabilidad animal ${id || ''}`;
+
+  if (method === 'POST')   return `Creación en ${modulo}`;
+  if (method === 'PUT')    return `Actualización en ${modulo}${id ? ' #' + id : ''}`;
+  if (method === 'DELETE') return `Eliminación en ${modulo}${id ? ' #' + id : ''}`;
+  if (method === 'GET')    return `Consulta en ${modulo}`;
+  return `Acción en ${modulo}`;
+}
 
 class AuditLogger {
-  constructor() {
-    this.logDir = path.join(__dirname, '../logs');
-    this.logFile = path.join(this.logDir, 'audit.log');
-    
-    // Crear directorio de logs si no existe
-    if (!fs.existsSync(this.logDir)) {
-      fs.mkdirSync(this.logDir, { recursive: true });
-    }
-  }
-
-  log(action, userId, details = {}) {
-    const logEntry = {
-      timestamp: new Date().toISOString(),
-      action,
-      userId,
-      userAgent: details.userAgent || 'Unknown',
-      ip: details.ip || 'Unknown',
-      details: details.data || {},
-      success: details.success !== false
-    };
-
-    const logLine = JSON.stringify(logEntry) + '\n';
-    
+  async log({ usuario_id, usuario_email, usuario_nombre, accion, modulo, descripcion,
+               entidad, entidad_id, ip, user_agent, metodo, ruta,
+               datos_anteriores, datos_nuevos, exitoso = true }) {
     try {
-      fs.appendFileSync(this.logFile, logLine);
-    } catch (error) {
-      console.error('Error escribiendo log de auditoría:', error);
+      await query(
+        `INSERT INTO audit_logs
+         (usuario_id, usuario_email, usuario_nombre, accion, modulo, descripcion,
+          entidad, entidad_id, ip, user_agent, metodo, ruta,
+          datos_anteriores, datos_nuevos, exitoso)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+        [
+          usuario_id || null,
+          usuario_email || null,
+          usuario_nombre || null,
+          accion,
+          modulo || null,
+          descripcion || null,
+          entidad || null,
+          entidad_id ? String(entidad_id) : null,
+          ip || null,
+          user_agent || null,
+          metodo || null,
+          ruta || null,
+          datos_anteriores ? JSON.stringify(datos_anteriores) : null,
+          datos_nuevos ? JSON.stringify(datos_nuevos) : null,
+          exitoso
+        ]
+      );
+    } catch (err) {
+      // No romper el flujo si falla el log
+      console.error('AuditLogger error:', err.message);
     }
   }
 
-  // Métodos específicos para diferentes acciones
-  logLogin(userId, ip, userAgent, success = true) {
-    this.log('LOGIN', userId, { ip, userAgent, success });
+  // Métodos de conveniencia
+  logLogin(userId, email, nombre, ip, userAgent, success = true) {
+    return this.log({ usuario_id: userId, usuario_email: email, usuario_nombre: nombre,
+      accion: 'LOGIN', modulo: 'Autenticación',
+      descripcion: success ? 'Inicio de sesión exitoso' : 'Intento de login fallido',
+      ip, user_agent: userAgent, metodo: 'POST', ruta: '/api/auth/login', exitoso: success });
   }
 
-  logLogout(userId, ip, userAgent) {
-    this.log('LOGOUT', userId, { ip, userAgent });
-  }
-
-  logCreate(userId, entity, data, ip, userAgent) {
-    this.log('CREATE', userId, { 
-      ip, 
-      userAgent, 
-      data: { entity, ...data } 
-    });
-  }
-
-  logUpdate(userId, entity, id, changes, ip, userAgent) {
-    this.log('UPDATE', userId, { 
-      ip, 
-      userAgent, 
-      data: { entity, id, changes } 
-    });
-  }
-
-  logDelete(userId, entity, id, ip, userAgent) {
-    this.log('DELETE', userId, { 
-      ip, 
-      userAgent, 
-      data: { entity, id } 
-    });
-  }
-
-  logAccess(userId, resource, ip, userAgent) {
-    this.log('ACCESS', userId, { 
-      ip, 
-      userAgent, 
-      data: { resource } 
-    });
-  }
-
-  // Obtener logs con filtros
-  getLogs(filters = {}) {
-    try {
-      const logContent = fs.readFileSync(this.logFile, 'utf8');
-      const logs = logContent.split('\n')
-        .filter(line => line.trim())
-        .map(line => JSON.parse(line))
-        .reverse(); // Más recientes primero
-
-      let filteredLogs = logs;
-
-      if (filters.userId) {
-        filteredLogs = filteredLogs.filter(log => log.userId === filters.userId);
-      }
-
-      if (filters.action) {
-        filteredLogs = filteredLogs.filter(log => log.action === filters.action);
-      }
-
-      if (filters.startDate) {
-        filteredLogs = filteredLogs.filter(log => 
-          new Date(log.timestamp) >= new Date(filters.startDate)
-        );
-      }
-
-      if (filters.endDate) {
-        filteredLogs = filteredLogs.filter(log => 
-          new Date(log.timestamp) <= new Date(filters.endDate)
-        );
-      }
-
-      if (filters.limit) {
-        filteredLogs = filteredLogs.slice(0, filters.limit);
-      }
-
-      return filteredLogs;
-    } catch (error) {
-      console.error('Error leyendo logs:', error);
-      return [];
-    }
-  }
-
-  // Rotar logs cuando sean muy grandes
-  rotateLogs() {
-    try {
-      if (!fs.existsSync(this.logFile)) return;
-      const stats = fs.statSync(this.logFile);
-      const maxSize = 10 * 1024 * 1024; // 10MB
-
-      if (stats.size > maxSize) {
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const rotatedFile = path.join(this.logDir, `audit_${timestamp}.log`);
-        
-        fs.renameSync(this.logFile, rotatedFile);
-        console.log(`📋 Log rotado: ${rotatedFile}`);
-      }
-    } catch (error) {
-      console.error('Error rotando logs:', error);
-    }
+  logLogout(userId, email, nombre, ip, userAgent) {
+    return this.log({ usuario_id: userId, usuario_email: email, usuario_nombre: nombre,
+      accion: 'LOGOUT', modulo: 'Autenticación', descripcion: 'Cierre de sesión',
+      ip, user_agent: userAgent, metodo: 'POST', ruta: '/api/auth/logout', exitoso: true });
   }
 }
 
-// Middleware para logging automático
+// Middleware automático — captura todas las mutaciones
 const auditMiddleware = (auditLogger) => {
   return (req, res, next) => {
-    const originalSend = res.send;
-    
-    res.send = function(data) {
-      // Log solo para operaciones importantes
-      if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
-        const userId = req.user?.id || 'anonymous';
-        const ip = req.ip || req.connection.remoteAddress;
-        const userAgent = req.get('User-Agent');
-        
-        let action = 'UNKNOWN';
-        let entity = 'unknown';
-        
-        // Determinar acción basada en la ruta
-        const path = req.path;
-        if (path.includes('/animals')) entity = 'animal';
-        else if (path.includes('/reproduction')) entity = 'reproduction';
-        else if (path.includes('/weights')) entity = 'weight';
-        else if (path.includes('/health')) entity = 'health';
-        else if (path.includes('/finance')) entity = 'finance';
-        else if (path.includes('/locations')) entity = 'location';
-        
-        if (req.method === 'POST') action = 'CREATE';
-        else if (req.method === 'PUT') action = 'UPDATE';
-        else if (req.method === 'DELETE') action = 'DELETE';
-        
-        const success = res.statusCode < 400;
-        
-        auditLogger.log(action, userId, {
-          ip,
-          userAgent,
-          success,
-          data: {
-            entity,
-            method: req.method,
-            path: req.path,
-            body: req.body,
-            params: req.params
-          }
-        });
-      }
-      
-      originalSend.call(this, data);
+    // Solo loguear métodos que modifican datos + GET sensibles
+    const logMethods = ['POST', 'PUT', 'DELETE', 'PATCH'];
+    if (!logMethods.includes(req.method)) return next();
+
+    // Excluir rutas de bajo valor
+    const skip = ['/api/csrf-token', '/health', '/api/auth/refresh'];
+    if (skip.some(s => req.path.startsWith(s))) return next();
+
+    const originalJson = res.json.bind(res);
+    res.json = function(data) {
+      const exitoso = res.statusCode < 400;
+      const user = req.user;
+      const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+      const ruta = req.originalUrl || req.path;
+      const modulo = detectarModulo(ruta);
+      const descripcion = detectarDescripcion(req.method, ruta, req.body);
+      const accionMap = { POST: 'CREATE', PUT: 'UPDATE', DELETE: 'DELETE', PATCH: 'UPDATE' };
+      const entidad_id = req.params?.id || data?.id || data?.animal?.id || null;
+
+      // Sanitizar body — no guardar passwords
+      const bodyClean = req.body ? { ...req.body } : {};
+      delete bodyClean.password;
+      delete bodyClean.password_hash;
+      delete bodyClean.token;
+
+      auditLogger.log({
+        usuario_id:     user?.id || null,
+        usuario_email:  user?.email || null,
+        usuario_nombre: user?.nombre || null,
+        accion:         accionMap[req.method] || req.method,
+        modulo,
+        descripcion,
+        entidad:        modulo,
+        entidad_id,
+        ip,
+        user_agent:     req.get('User-Agent'),
+        metodo:         req.method,
+        ruta,
+        datos_nuevos:   Object.keys(bodyClean).length > 0 ? bodyClean : null,
+        exitoso
+      });
+
+      return originalJson(data);
     };
-    
+
     next();
   };
 };

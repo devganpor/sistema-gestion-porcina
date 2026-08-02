@@ -21,7 +21,8 @@ const Sidebar: React.FC = () => {
     { path: '/nutrition', icon: 'fas fa-seedling', label: 'Nutrición' },
     { path: '/reports', icon: 'fas fa-chart-bar', label: 'Reportes' },
     { path: '/users', icon: 'fas fa-users', label: 'Usuarios' },
-    { path: '/analytics', icon: 'fas fa-brain', label: 'Analytics' }
+    { path: '/analytics', icon: 'fas fa-brain', label: 'Analytics' },
+    ...(user?.rol === 'administrador' ? [{ path: '/audit', icon: 'fas fa-shield-alt', label: 'Auditoría' }] : [])
   ];
 
   useEffect(() => {

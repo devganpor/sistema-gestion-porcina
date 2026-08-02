@@ -27,6 +27,7 @@ const nutritionRoutes = require('./routes/nutrition');
 const usersRoutes = require('./routes/users');
 const emailRoutes = require('./routes/email');
 const analyticsRoutes = require('./routes/analytics');
+const auditRoutes = require('./routes/audit');
 const BackupService = require('./services/BackupService');
 const { AuditLogger, auditMiddleware } = require('./services/AuditLogger');
 const { errorHandler } = require('./middleware/errorHandler');
@@ -122,22 +123,6 @@ app.get('/api/admin/backups', authenticateToken, requireRole(['administrador']),
   }
 });
 
-app.get('/api/admin/audit-logs', authenticateToken, requireRole(['administrador']), (req, res) => {
-  try {
-    const filters = {
-      userId: req.query.userId,
-      action: req.query.action,
-      startDate: req.query.startDate,
-      endDate: req.query.endDate,
-      limit: parseInt(req.query.limit) || 100
-    };
-    const logs = auditLogger.getLogs(filters);
-    res.json(logs);
-  } catch (error) {
-    res.status(500).json({ error: 'Error obteniendo logs' });
-  }
-});
-
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/animals', animalsRoutes);
@@ -153,6 +138,7 @@ app.use('/api/nutrition', nutritionRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/audit', auditRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

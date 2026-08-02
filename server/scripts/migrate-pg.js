@@ -551,6 +551,33 @@ async function createTables() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_alimentacion_fecha ON alimentacion_animal(fecha)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_alimentacion_registro ON alimentacion_animal(registro_alimentacion_id)`);
 
+    // === TABLA DE AUDIT LOGS EN BASE DE DATOS ===
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id SERIAL PRIMARY KEY,
+        usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+        usuario_email VARCHAR(255),
+        usuario_nombre VARCHAR(255),
+        accion VARCHAR(50) NOT NULL,
+        modulo VARCHAR(100),
+        descripcion TEXT,
+        entidad VARCHAR(100),
+        entidad_id VARCHAR(100),
+        ip VARCHAR(50),
+        user_agent TEXT,
+        metodo VARCHAR(10),
+        ruta VARCHAR(255),
+        datos_anteriores JSONB,
+        datos_nuevos JSONB,
+        exitoso BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_usuario ON audit_logs(usuario_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_accion ON audit_logs(accion)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_modulo ON audit_logs(modulo)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_fecha ON audit_logs(created_at DESC)`);
+
     console.log('✅ Datos iniciales insertados');
     console.log('🎉 Migración completada exitosamente');
 
