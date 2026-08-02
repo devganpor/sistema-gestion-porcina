@@ -1,21 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
-import Dashboard from './components/Dashboard';
-import ModernDashboard from './components/ModernDashboard';
-import Animals from './components/Animals';
-import Reproduction from './components/Reproduction';
-import Locations from './components/Locations';
-import Weights from './components/Weights';
-import Health from './components/Health';
-import Finance from './components/Finance';
-import Reports from './components/Reports';
-import Analytics from './components/Analytics';
-import Genealogy from './components/Genealogy';
-import NutritionComplete from './components/NutritionComplete';
-import UserManagement from './components/UserManagement';
-import NotificationCenter from './components/NotificationCenter';
-import UserProfile from './components/UserProfile';
 import Sidebar from './components/Sidebar';
 import ProfileDropdown from './components/ProfileDropdown';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -26,6 +11,31 @@ import './styles/global.css';
 import './styles/responsive.css';
 import './styles/forms.css';
 import './styles/form-fix.css';
+
+// Lazy loading - cada módulo carga solo cuando se necesita
+const ModernDashboard = lazy(() => import('./components/ModernDashboard'));
+const Animals = lazy(() => import('./components/Animals'));
+const Reproduction = lazy(() => import('./components/Reproduction'));
+const Locations = lazy(() => import('./components/Locations'));
+const Weights = lazy(() => import('./components/Weights'));
+const Health = lazy(() => import('./components/Health'));
+const Finance = lazy(() => import('./components/Finance'));
+const Reports = lazy(() => import('./components/Reports'));
+const Analytics = lazy(() => import('./components/Analytics'));
+const Genealogy = lazy(() => import('./components/Genealogy'));
+const NutritionComplete = lazy(() => import('./components/NutritionComplete'));
+const UserManagement = lazy(() => import('./components/UserManagement'));
+const NotificationCenter = lazy(() => import('./components/NotificationCenter'));
+const UserProfile = lazy(() => import('./components/UserProfile'));
+
+const PageLoader = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+    <div style={{ textAlign: 'center', color: '#1572e8' }}>
+      <div style={{ fontSize: '36px', marginBottom: '12px' }}>⏳</div>
+      <div style={{ fontWeight: '600' }}>Cargando módulo...</div>
+    </div>
+  </div>
+);
 
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
@@ -113,23 +123,25 @@ const AppContent: React.FC = () => {
           </div>
         </div>
         <div className="page-inner" style={pageInnerStyles}>
-          <Routes>
-            <Route path="/" element={<ModernDashboard />} />
-            <Route path="/animals" element={<Animals />} />
-            <Route path="/reproduction" element={<Reproduction />} />
-            <Route path="/locations" element={<Locations />} />
-            <Route path="/weights" element={<Weights />} />
-            <Route path="/health" element={<Health />} />
-            <Route path="/finance" element={<Finance />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/genealogy" element={<Genealogy />} />
-            <Route path="/nutrition" element={<NutritionComplete />} />
-            <Route path="/users" element={<UserManagement />} />
-            <Route path="/notifications" element={<NotificationCenter />} />
-            <Route path="/profile" element={<UserProfile />} />
-            <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/" element={<ModernDashboard />} />
+              <Route path="/animals" element={<Animals />} />
+              <Route path="/reproduction" element={<Reproduction />} />
+              <Route path="/locations" element={<Locations />} />
+              <Route path="/weights" element={<Weights />} />
+              <Route path="/health" element={<Health />} />
+              <Route path="/finance" element={<Finance />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/genealogy" element={<Genealogy />} />
+              <Route path="/nutrition" element={<NutritionComplete />} />
+              <Route path="/users" element={<UserManagement />} />
+              <Route path="/notifications" element={<NotificationCenter />} />
+              <Route path="/profile" element={<UserProfile />} />
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+          </Suspense>
         </div>
       </div>
     </div>
