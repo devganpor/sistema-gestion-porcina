@@ -16,8 +16,8 @@ interface Etapa {
   semana: number;
   alimento: string;
   cad_kg_animal: number;
-  dias_inicio: number;
-  dias_fin: number;
+  fecha_inicio: string;
+  fecha_fin: string;
 }
 
 interface Plan {
@@ -46,6 +46,8 @@ interface ResumenEtapa {
   semana: number;
   alimento: string;
   cad_kg_animal: number;
+  fecha_inicio: string;
+  fecha_fin: string;
   dias: number;
   consumo_total_kg: number;
   sacos_etapa: number;
@@ -237,29 +239,29 @@ const NutritionComplete: React.FC = () => {
   // ---- Excel: descarga plantilla ----
   const downloadPlanTemplate = () => {
     const ws = XLSX.utils.aoa_to_sheet([
-      ['SEMANA', 'ALIMENTO', 'CAD_KG_ANIMAL', 'DIA_INICIO', 'DIA_FIN'],
-      [1, 'CRECIMIENTO 1 HARINA', 1.45, 1, 7],
-      [2, 'CRECIMIENTO 1 HARINA', 1.65, 8, 14],
-      [3, 'CRECIMIENTO 1 HARINA', 1.75, 15, 21],
-      [4, 'CRECIMIENTO 1 HARINA', 1.90, 22, 28],
-      [5, 'CRECIMIENTO 1 HARINA', 2.05, 29, 35],
-      [6, 'CRECIMIENTO 2 HARINA', 2.15, 36, 42],
-      [7, 'CRECIMIENTO 2 HARINA', 2.30, 43, 49],
-      [8, 'CRECIMIENTO 2 HARINA', 2.45, 50, 56],
-      [9, 'CRECIMIENTO 2 HARINA', 2.55, 57, 63],
-      [10, 'FINALIZADOR HARINA', 2.70, 64, 70],
-      [11, 'FINALIZADOR HARINA', 2.80, 71, 77],
-      [12, 'FINALIZADOR HARINA', 2.90, 78, 84],
-      [13, 'FINALIZADOR HARINA', 3.00, 85, 91]
+      ['SEMANA', 'ALIMENTO', 'CAD_KG_ANIMAL', 'FECHA_INICIO', 'FECHA_FIN'],
+      [1, 'CRECIMIENTO 1 HARINA', 1.45, '2026-07-31', '2026-08-06'],
+      [2, 'CRECIMIENTO 1 HARINA', 1.65, '2026-08-07', '2026-08-13'],
+      [3, 'CRECIMIENTO 1 HARINA', 1.75, '2026-08-14', '2026-08-20'],
+      [4, 'CRECIMIENTO 1 HARINA', 1.90, '2026-08-21', '2026-08-27'],
+      [5, 'CRECIMIENTO 1 HARINA', 2.05, '2026-08-28', '2026-09-03'],
+      [6, 'CRECIMIENTO 2 HARINA', 2.15, '2026-09-04', '2026-09-10'],
+      [7, 'CRECIMIENTO 2 HARINA', 2.30, '2026-09-11', '2026-09-17'],
+      [8, 'CRECIMIENTO 2 HARINA', 2.45, '2026-09-18', '2026-09-24'],
+      [9, 'CRECIMIENTO 2 HARINA', 2.55, '2026-09-25', '2026-10-01'],
+      [10, 'FINALIZADOR HARINA', 2.70, '2026-10-02', '2026-10-08'],
+      [11, 'FINALIZADOR HARINA', 2.80, '2026-10-09', '2026-10-15'],
+      [12, 'FINALIZADOR HARINA', 2.90, '2026-10-16', '2026-10-22'],
+      [13, 'FINALIZADOR HARINA', 3.00, '2026-10-23', '2026-10-29']
     ]);
-    ws['!cols'] = [10, 25, 16, 12, 10].map(w => ({ wch: w }));
+    ws['!cols'] = [10, 25, 16, 14, 14].map(w => ({ wch: w }));
     const ref = XLSX.utils.aoa_to_sheet([
       ['CAMPO', 'DESCRIPCIÓN'],
       ['SEMANA', 'Número de semana (1, 2, 3...)'],
       ['ALIMENTO', 'Nombre del alimento (ej: CRECIMIENTO 1 HARINA)'],
       ['CAD_KG_ANIMAL', 'Consumo diario en kg por animal (ej: 1.45)'],
-      ['DIA_INICIO', 'Día de inicio de esta etapa (ej: 1)'],
-      ['DIA_FIN', 'Día de fin de esta etapa (ej: 7)']
+      ['FECHA_INICIO', 'Fecha de inicio de la etapa (YYYY-MM-DD)'],
+      ['FECHA_FIN', 'Fecha de fin de la etapa (YYYY-MM-DD)']
     ]);
     ref['!cols'] = [16, 45].map(w => ({ wch: w }));
     const wb = XLSX.utils.book_new();
@@ -284,10 +286,10 @@ const NutritionComplete: React.FC = () => {
           semana: parseInt(r['SEMANA']),
           alimento: (r['ALIMENTO'] || '').toString().trim(),
           cad_kg_animal: parseFloat((r['CAD_KG_ANIMAL'] || '0').toString().replace(',', '.')),
-          dias_inicio: parseInt(r['DIA_INICIO']),
-          dias_fin: parseInt(r['DIA_FIN'])
+          fecha_inicio: excelDateToISO(r['FECHA_INICIO']),
+          fecha_fin:    excelDateToISO(r['FECHA_FIN'])
         }))
-        .filter(e => !isNaN(e.semana) && !isNaN(e.cad_kg_animal) && !isNaN(e.dias_inicio) && !isNaN(e.dias_fin));
+        .filter(e => !isNaN(e.semana) && !isNaN(e.cad_kg_animal) && e.fecha_inicio && e.fecha_fin);
       setBulkEtapas(etapas);
     };
     reader.readAsArrayBuffer(file);
@@ -538,16 +540,16 @@ const NutritionComplete: React.FC = () => {
                         <div style={{ fontWeight: '600', marginBottom: '8px', color: '#1a2035' }}>Vista previa de etapas:</div>
                         <div className="table-responsive">
                           <table className="table" style={{ fontSize: '13px' }}>
-                            <thead><tr><th>Semana</th><th>Alimento</th><th>CAD kg/animal</th><th>Día inicio</th><th>Día fin</th><th>Días</th></tr></thead>
+                            <thead><tr><th>Semana</th><th>Alimento</th><th>CAD kg/animal</th><th>Fecha inicio</th><th>Fecha fin</th><th>Días</th></tr></thead>
                             <tbody>
                               {bulkEtapas.map((e, i) => (
                                 <tr key={i}>
                                   <td>{e.semana}</td>
                                   <td>{e.alimento}</td>
                                   <td style={{ fontWeight: '600', color: '#1572e8' }}>{e.cad_kg_animal}</td>
-                                  <td>{e.dias_inicio}</td>
-                                  <td>{e.dias_fin}</td>
-                                  <td>{e.dias_fin - e.dias_inicio + 1}</td>
+                                  <td>{e.fecha_inicio}</td>
+                                  <td>{e.fecha_fin}</td>
+                                  <td>{Math.round((new Date(e.fecha_fin).getTime() - new Date(e.fecha_inicio).getTime()) / 86400000) + 1}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -642,17 +644,17 @@ const NutritionComplete: React.FC = () => {
                     {/* Etapas manuales */}
                     <div style={{ marginBottom: '12px', fontWeight: '700', color: '#1a2035' }}>Etapas del plan:</div>
                     {planEtapas.map((et, i) => (
-                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 120px 100px 100px 40px', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 120px 140px 140px 40px', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
                         <input type="number" value={et.semana} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],semana:parseInt(e.target.value)||0}; setPlanEtapas(arr); }} style={inp()} placeholder="Sem" />
                         <input type="text" value={et.alimento} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],alimento:e.target.value}; setPlanEtapas(arr); }} style={inp()} placeholder="Alimento" />
                         <input type="number" step="0.01" value={et.cad_kg_animal} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],cad_kg_animal:parseFloat(e.target.value)||0}; setPlanEtapas(arr); }} style={inp()} placeholder="kg/animal" />
-                        <input type="number" value={et.dias_inicio} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],dias_inicio:parseInt(e.target.value)||0}; setPlanEtapas(arr); }} style={inp()} placeholder="Día ini" />
-                        <input type="number" value={et.dias_fin} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],dias_fin:parseInt(e.target.value)||0}; setPlanEtapas(arr); }} style={inp()} placeholder="Día fin" />
+                        <input type="date" value={et.fecha_inicio} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],fecha_inicio:e.target.value}; setPlanEtapas(arr); }} style={inp()} />
+                        <input type="date" value={et.fecha_fin} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],fecha_fin:e.target.value}; setPlanEtapas(arr); }} style={inp()} />
                         <button className="btn btn-danger btn-sm" onClick={() => setPlanEtapas(planEtapas.filter((_,j)=>j!==i))}><i className="fas fa-times"></i></button>
                       </div>
                     ))}
                     <button className="btn btn-secondary btn-sm" style={{ marginBottom: '16px' }}
-                      onClick={() => setPlanEtapas([...planEtapas, { semana: planEtapas.length+1, alimento: '', cad_kg_animal: 0, dias_inicio: 0, dias_fin: 0 }])}>
+                      onClick={() => setPlanEtapas([...planEtapas, { semana: planEtapas.length+1, alimento: '', cad_kg_animal: 0, fecha_inicio: '', fecha_fin: '' }])}>
                       <i className="fas fa-plus" style={{ marginRight: '6px' }}></i>Agregar Etapa
                     </button>
 
@@ -771,7 +773,7 @@ const NutritionComplete: React.FC = () => {
                             <table className="table">
                               <thead>
                                 <tr style={{ background: '#f8f9fa' }}>
-                                  <th>Semana</th><th>Alimento</th><th>CAD kg/animal</th><th>Días</th><th>Consumo total kg</th><th>Sacos etapa</th>
+                                  <th>Semana</th><th>Alimento</th><th>CAD kg/animal</th><th>Fecha inicio</th><th>Fecha fin</th><th>Días</th><th>Consumo total kg</th><th>Sacos etapa</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -780,6 +782,8 @@ const NutritionComplete: React.FC = () => {
                                     <td><span style={{ background: '#1572e8', color: '#fff', borderRadius: '12px', padding: '3px 10px', fontSize: '12px', fontWeight: '700' }}>Sem {e.semana}</span></td>
                                     <td style={{ fontWeight: '600' }}>{e.alimento}</td>
                                     <td style={{ color: '#1572e8', fontWeight: '700' }}>{e.cad_kg_animal} kg</td>
+                                    <td>{new Date(e.fecha_inicio).toLocaleDateString()}</td>
+                                    <td>{new Date(e.fecha_fin).toLocaleDateString()}</td>
                                     <td>{e.dias}</td>
                                     <td style={{ fontWeight: '600' }}>{e.consumo_total_kg.toLocaleString()} kg</td>
                                     <td><span style={{ background: '#31ce36', color: '#fff', borderRadius: '12px', padding: '3px 10px', fontSize: '12px', fontWeight: '700' }}>{e.sacos_etapa} sacos</span></td>

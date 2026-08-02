@@ -459,9 +459,28 @@ async function createTables() {
         semana INTEGER NOT NULL,
         alimento VARCHAR(100),
         cad_kg_animal DECIMAL(6,3) NOT NULL,
-        dias_inicio INTEGER NOT NULL,
-        dias_fin INTEGER NOT NULL
+        fecha_inicio DATE NOT NULL,
+        fecha_fin DATE NOT NULL
       )
+    `);
+    // Migrar dias_inicio/dias_fin -> fecha_inicio/fecha_fin si existe la version antigua
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='plan_etapas' AND column_name='dias_inicio')
+        AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='plan_etapas' AND column_name='fecha_inicio')
+        THEN
+          ALTER TABLE plan_etapas ADD COLUMN fecha_inicio DATE;
+          ALTER TABLE plan_etapas ADD COLUMN fecha_fin DATE;
+          UPDATE plan_etapas pe SET
+            fecha_inicio = pa.fecha_inicio + (pe.dias_inicio - 1) * INTERVAL '1 day',
+            fecha_fin    = pa.fecha_inicio + (pe.dias_fin   - 1) * INTERVAL '1 day'
+          FROM planes_alimentacion pa WHERE pe.plan_id = pa.id;
+          ALTER TABLE plan_etapas ALTER COLUMN fecha_inicio SET NOT NULL;
+          ALTER TABLE plan_etapas ALTER COLUMN fecha_fin    SET NOT NULL;
+          ALTER TABLE plan_etapas DROP COLUMN dias_inicio;
+          ALTER TABLE plan_etapas DROP COLUMN dias_fin;
+        END IF;
+      END $$;
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_plan_etapas_plan ON plan_etapas(plan_id)`);
 

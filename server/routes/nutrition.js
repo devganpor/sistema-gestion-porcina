@@ -283,16 +283,20 @@ router.get('/plans/:id', authenticateToken, async (req, res) => {
 
     // Generar proyección día a día
     const dias = [];
-    const fechaInicio = new Date(plan.fecha_inicio);
     etapas.forEach(etapa => {
-      for (let d = etapa.dias_inicio; d <= etapa.dias_fin; d++) {
-        const fecha = new Date(fechaInicio);
-        fecha.setDate(fecha.getDate() + d - 1);
+      const start = new Date(etapa.fecha_inicio);
+      const end   = new Date(etapa.fecha_fin);
+      let current = new Date(start);
+      let diaNum = 1;
+      // calcular número de día absoluto desde fecha_inicio del plan
+      const planStart = new Date(plan.fecha_inicio);
+      while (current <= end) {
+        const diaAbsoluto = Math.round((current - planStart) / 86400000) + 1;
         const consumoDiarioTotal = Math.round(parseFloat(etapa.cad_kg_animal) * plan.total_animales);
         const sacosDiarios = Math.ceil(consumoDiarioTotal / parseFloat(plan.kg_por_saco));
         dias.push({
-          dia: d,
-          fecha: fecha.toISOString().split('T')[0],
+          dia: diaAbsoluto,
+          fecha: current.toISOString().split('T')[0],
           semana: etapa.semana,
           alimento: etapa.alimento,
           cad_kg_animal: parseFloat(etapa.cad_kg_animal),
@@ -300,17 +304,23 @@ router.get('/plans/:id', authenticateToken, async (req, res) => {
           consumo_diario_total: consumoDiarioTotal,
           sacos_diarios: sacosDiarios
         });
+        current.setDate(current.getDate() + 1);
+        diaNum++;
       }
     });
 
     // Resumen por etapa
     const resumenEtapas = etapas.map(e => {
-      const diasEtapa = e.dias_fin - e.dias_inicio + 1;
+      const start = new Date(e.fecha_inicio);
+      const end   = new Date(e.fecha_fin);
+      const diasEtapa = Math.round((end - start) / 86400000) + 1;
       const consumoEtapa = parseFloat(e.cad_kg_animal) * plan.total_animales * diasEtapa;
       return {
         semana: e.semana,
         alimento: e.alimento,
         cad_kg_animal: parseFloat(e.cad_kg_animal),
+        fecha_inicio: e.fecha_inicio,
+        fecha_fin: e.fecha_fin,
         dias: diasEtapa,
         consumo_total_kg: Math.round(consumoEtapa),
         sacos_etapa: Math.ceil(consumoEtapa / parseFloat(plan.kg_por_saco))
@@ -340,9 +350,9 @@ router.post('/plans', authenticateToken, async (req, res) => {
     const planId = planRes.rows[0].id;
     for (const e of etapas) {
       await client.query(
-        `INSERT INTO plan_etapas (plan_id, semana, alimento, cad_kg_animal, dias_inicio, dias_fin)
+        `INSERT INTO plan_etapas (plan_id, semana, alimento, cad_kg_animal, fecha_inicio, fecha_fin)
          VALUES ($1,$2,$3,$4,$5,$6)`,
-        [planId, e.semana, e.alimento || null, e.cad_kg_animal, e.dias_inicio, e.dias_fin]
+        [planId, e.semana, e.alimento || null, e.cad_kg_animal, e.fecha_inicio, e.fecha_fin]
       );
     }
     await client.query('COMMIT');
