@@ -22,22 +22,44 @@ async function createTables() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS razas (
         id SERIAL PRIMARY KEY,
-        nombre VARCHAR(100) NOT NULL,
+        nombre VARCHAR(100) UNIQUE NOT NULL,
         descripcion TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+    // Agregar UNIQUE constraint a nombre si no existe (para DBs ya creadas)
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'razas_nombre_key' AND conrelid = 'razas'::regclass
+        ) THEN
+          ALTER TABLE razas ADD CONSTRAINT razas_nombre_key UNIQUE (nombre);
+        END IF;
+      END $$;
     `);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS ubicaciones (
         id SERIAL PRIMARY KEY,
-        nombre VARCHAR(100) NOT NULL,
+        nombre VARCHAR(100) UNIQUE NOT NULL,
         tipo VARCHAR(50),
         capacidad_maxima INTEGER,
         descripcion TEXT,
         activa BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+    // Agregar UNIQUE constraint a nombre si no existe (para DBs ya creadas)
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'ubicaciones_nombre_key' AND conrelid = 'ubicaciones'::regclass
+        ) THEN
+          ALTER TABLE ubicaciones ADD CONSTRAINT ubicaciones_nombre_key UNIQUE (nombre);
+        END IF;
+      END $$;
     `);
 
     // Migrar columna 'capacidad' -> 'capacidad_maxima' si existe la versión antigua

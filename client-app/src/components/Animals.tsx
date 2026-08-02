@@ -11,7 +11,9 @@ interface Animal {
   categoria: string;
   estado: string;
   raza_nombre: string;
+  raza_id?: number;
   ubicacion_nombre: string;
+  ubicacion_actual_id?: number;
   fecha_nacimiento: string;
   peso_nacimiento?: number;
   observaciones?: string;
@@ -226,8 +228,8 @@ const Animals: React.FC = () => {
       fecha_nacimiento: animal.fecha_nacimiento?.split('T')[0] || '',
       peso_nacimiento: animal.peso_nacimiento?.toString() || '',
       observaciones: animal.observaciones || '',
-      raza_id: '',
-      ubicacion_actual_id: '',
+      raza_id: animal.raza_id?.toString() || '',
+      ubicacion_actual_id: animal.ubicacion_actual_id?.toString() || '',
       padre_id: '',
       madre_id: ''
     });

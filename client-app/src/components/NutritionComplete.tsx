@@ -513,7 +513,7 @@ const NutritionComplete: React.FC = () => {
                     <div style={{ background: '#f0f7ff', border: '1px solid #bee3f8', borderRadius: '8px', padding: '14px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                       <div>
                         <div style={{ fontWeight: '700', color: '#1a2035' }}><i className="fas fa-download" style={{ marginRight: '8px', color: '#1572e8' }}></i>Paso 1 — Descarga la plantilla</div>
-                        <div style={{ fontSize: '13px', color: '#6c757d' }}>Columnas: SEMANA, ALIMENTO, CAD_KG_ANIMAL, DIA_INICIO, DIA_FIN</div>
+                        <div style={{ fontSize: '13px', color: '#6c757d' }}>Columnas: SEMANA, ALIMENTO, CAD_KG_ANIMAL, FECHA_INICIO, FECHA_FIN</div>
                       </div>
                       <button className="btn btn-primary btn-sm" onClick={downloadPlanTemplate}>
                         <i className="fas fa-file-download" style={{ marginRight: '6px' }}></i>Descargar Plantilla

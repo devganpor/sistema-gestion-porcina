@@ -29,7 +29,7 @@ const Locations: React.FC = () => {
     nombre: '',
     tipo: 'corral',
     capacidad_maxima: '',
-    ubicacion_padre_id: ''
+    descripcion: ''
   });
   const [moveData, setMoveData] = useState({
     animal_id: '',
@@ -65,8 +65,7 @@ const Locations: React.FC = () => {
     try {
       const data = {
         ...formData,
-        capacidad_maxima: formData.capacidad_maxima ? parseInt(formData.capacidad_maxima) : null,
-        ubicacion_padre_id: formData.ubicacion_padre_id ? parseInt(formData.ubicacion_padre_id) : null
+        capacidad_maxima: formData.capacidad_maxima ? parseInt(formData.capacidad_maxima) : null
       };
       
       if (editingId) {
@@ -90,7 +89,7 @@ const Locations: React.FC = () => {
       nombre: '',
       tipo: 'corral',
       capacidad_maxima: '',
-      ubicacion_padre_id: ''
+      descripcion: ''
     });
   };
 
@@ -99,7 +98,7 @@ const Locations: React.FC = () => {
       nombre: ubicacion.nombre,
       tipo: ubicacion.tipo,
       capacidad_maxima: ubicacion.capacidad_maxima?.toString() || '',
-      ubicacion_padre_id: ''
+      descripcion: ''
     });
     setEditingId(ubicacion.id);
     setShowForm(true);
@@ -149,6 +148,8 @@ const Locations: React.FC = () => {
   const granjas = ubicaciones.filter(u => u.tipo === 'granja');
   const galpones = ubicaciones.filter(u => u.tipo === 'galpon');
   const corrales = ubicaciones.filter(u => u.tipo === 'corral');
+  const maternidades = ubicaciones.filter(u => u.tipo === 'maternidad');
+  const aislamientos = ubicaciones.filter(u => u.tipo === 'aislamiento');
 
   return (
     <div>
@@ -197,6 +198,8 @@ const Locations: React.FC = () => {
                   <option value="granja">Granja</option>
                   <option value="galpon">Galpón</option>
                   <option value="corral">Corral</option>
+                  <option value="maternidad">Maternidad</option>
+                  <option value="aislamiento">Aislamiento</option>
                 </select>
               </div>
               <div className="form-group">
@@ -209,19 +212,14 @@ const Locations: React.FC = () => {
                 />
               </div>
               <div className="form-group">
-                <label>Ubicación Padre:</label>
-                <select
+                <label>Descripción:</label>
+                <input
+                  type="text"
                   className="form-control"
-                  value={formData.ubicacion_padre_id}
-                  onChange={(e) => setFormData({...formData, ubicacion_padre_id: e.target.value})}
-                >
-                  <option value="">Ninguna</option>
-                  {ubicaciones.map(ubicacion => (
-                    <option key={ubicacion.id} value={ubicacion.id}>
-                      {ubicacion.nombre} ({ubicacion.tipo})
-                    </option>
-                  ))}
-                </select>
+                  value={formData.descripcion}
+                  onChange={(e) => setFormData({...formData, descripcion: e.target.value})}
+                  placeholder="Descripción opcional"
+                />
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>
@@ -293,7 +291,7 @@ const Locations: React.FC = () => {
       {/* Lista de Ubicaciones */}
       <div className="grid grid-3">
         {/* Granjas */}
-        <div className="card">
+        {granjas.length > 0 && <div className="card">
           <h3>🏢 Granjas ({granjas.length})</h3>
           {granjas.map(ubicacion => (
             <div key={ubicacion.id} style={{
@@ -330,15 +328,10 @@ const Locations: React.FC = () => {
               </div>
             </div>
           ))}
-          {granjas.length === 0 && (
-            <p style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
-              No hay granjas registradas
-            </p>
-          )}
-        </div>
+        </div>}
 
         {/* Galpones */}
-        <div className="card">
+        {galpones.length > 0 && <div className="card">
           <h3>🏠 Galpones ({galpones.length})</h3>
           {galpones.map(ubicacion => (
             <div key={ubicacion.id} style={{
@@ -360,12 +353,7 @@ const Locations: React.FC = () => {
               )}
             </div>
           ))}
-          {galpones.length === 0 && (
-            <p style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
-              No hay galpones registrados
-            </p>
-          )}
-        </div>
+        </div>}
 
         {/* Corrales */}
         <div className="card">
@@ -415,6 +403,44 @@ const Locations: React.FC = () => {
             </p>
           )}
         </div>
+
+        {/* Maternidades */}
+        {maternidades.length > 0 && <div className="card">
+          <h3>🐣 Maternidad ({maternidades.length})</h3>
+          {maternidades.map(ubicacion => (
+            <div key={ubicacion.id} style={{ padding: '12px', margin: '8px 0', backgroundColor: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>{ubicacion.nombre}</div>
+                  <div style={{ fontSize: '14px', color: '#666' }}>Animales: {ubicacion.animales_actuales}{ubicacion.capacidad_maxima && ` / ${ubicacion.capacidad_maxima}`}</div>
+                </div>
+                <div style={{ display: 'flex', gap: '5px' }}>
+                  <button className="btn btn-warning btn-sm" onClick={() => handleEdit(ubicacion)} title="Editar">✏️</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(ubicacion.id)} title="Eliminar">🗑️</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>}
+
+        {/* Aislamientos */}
+        {aislamientos.length > 0 && <div className="card">
+          <h3>🔒 Aislamiento ({aislamientos.length})</h3>
+          {aislamientos.map(ubicacion => (
+            <div key={ubicacion.id} style={{ padding: '12px', margin: '8px 0', backgroundColor: '#fff3cd', border: '1px solid #ffeaa7', borderRadius: '4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>{ubicacion.nombre}</div>
+                  <div style={{ fontSize: '14px', color: '#666' }}>Animales: {ubicacion.animales_actuales}{ubicacion.capacidad_maxima && ` / ${ubicacion.capacidad_maxima}`}</div>
+                </div>
+                <div style={{ display: 'flex', gap: '5px' }}>
+                  <button className="btn btn-warning btn-sm" onClick={() => handleEdit(ubicacion)} title="Editar">✏️</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(ubicacion.id)} title="Eliminar">🗑️</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>}
       </div>
     </div>
   );

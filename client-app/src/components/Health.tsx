@@ -35,6 +35,8 @@ const Health: React.FC = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [success, setSuccess] = useState('');
+  const [upcomingVaccinations, setUpcomingVaccinations] = useState<any[]>([]);
+  const [expiringMeds, setExpiringMeds] = useState<any[]>([]);
   
   const [formData, setFormData] = useState({
     animal_id: '',
@@ -112,12 +114,16 @@ const Health: React.FC = () => {
 
   const loadHealthData = async () => {
     try {
-      const [eventsRes, vaccinationsRes] = await Promise.all([
+      const [eventsRes, vaccinationsRes, upcomingRes, expiringRes] = await Promise.all([
         api.get('/health/events').catch(() => ({ data: [] })),
-        api.get('/health/vaccinations').catch(() => ({ data: [] }))
+        api.get('/health/vaccinations').catch(() => ({ data: [] })),
+        api.get('/health/vaccinations/upcoming').catch(() => ({ data: [] })),
+        api.get('/health/medications/expiring').catch(() => ({ data: [] }))
       ]);
       setHealthEvents(eventsRes.data);
       setVaccinations(vaccinationsRes.data);
+      setUpcomingVaccinations(upcomingRes.data);
+      setExpiringMeds(expiringRes.data);
     } catch (error) {
       console.error('Error cargando datos de salud:', error);
     } finally {
@@ -719,29 +725,59 @@ const Health: React.FC = () => {
           {activeTab === 'alertas' && (
             <div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '15px', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffeaa7' }}>
-                  <i className="fas fa-syringe" style={{ fontSize: '24px', color: '#ffad46' }}></i>
-                  <div>
-                    <div style={{ fontWeight: '600', color: '#1a2035' }}>Vacunaciones Pendientes</div>
-                    <div style={{ fontSize: '14px', color: '#6c757d' }}>5 animales requieren vacunación triple en los próximos 7 días</div>
+                {upcomingVaccinations.length > 0 ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '15px', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffeaa7' }}>
+                    <i className="fas fa-syringe" style={{ fontSize: '24px', color: '#ffad46' }}></i>
+                    <div>
+                      <div style={{ fontWeight: '600', color: '#1a2035' }}>Vacunaciones Próximas</div>
+                      <div style={{ fontSize: '14px', color: '#6c757d' }}>{upcomingVaccinations.length} animal(es) con dosis pendiente en los próximos 30 días</div>
+                      {upcomingVaccinations.slice(0, 3).map((v, i) => (
+                        <div key={i} style={{ fontSize: '13px', color: '#856404', marginTop: '4px' }}>
+                          • {v.identificador_unico} — {v.vacuna} el {new Date(v.proxima_dosis).toLocaleDateString()}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '15px', background: '#f8d7da', borderRadius: '8px', border: '1px solid #f5c6cb' }}>
-                  <i className="fas fa-exclamation-triangle" style={{ fontSize: '24px', color: '#f25961' }}></i>
-                  <div>
-                    <div style={{ fontWeight: '600', color: '#1a2035' }}>Medicamentos Vencidos</div>
-                    <div style={{ fontSize: '14px', color: '#6c757d' }}>2 medicamentos próximos a vencer en el inventario</div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '15px', background: '#d4edda', borderRadius: '8px', border: '1px solid #c3e6cb' }}>
+                    <i className="fas fa-check-circle" style={{ fontSize: '24px', color: '#31ce36' }}></i>
+                    <div>
+                      <div style={{ fontWeight: '600', color: '#155724' }}>Vacunaciones al día</div>
+                      <div style={{ fontSize: '14px', color: '#6c757d' }}>No hay vacunaciones pendientes en los próximos 30 días</div>
+                    </div>
                   </div>
-                </div>
-                
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '15px', background: '#d1ecf1', borderRadius: '8px', border: '1px solid #bee5eb' }}>
-                  <i className="fas fa-clock" style={{ fontSize: '24px', color: '#1572e8' }}></i>
-                  <div>
-                    <div style={{ fontWeight: '600', color: '#1a2035' }}>Período de Retiro</div>
-                    <div style={{ fontSize: '14px', color: '#6c757d' }}>3 animales en período de retiro por medicamentos</div>
+                )}
+
+                {expiringMeds.length > 0 ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '15px', background: '#f8d7da', borderRadius: '8px', border: '1px solid #f5c6cb' }}>
+                    <i className="fas fa-exclamation-triangle" style={{ fontSize: '24px', color: '#f25961' }}></i>
+                    <div>
+                      <div style={{ fontWeight: '600', color: '#1a2035' }}>Medicamentos por Vencer</div>
+                      <div style={{ fontSize: '14px', color: '#6c757d' }}>{expiringMeds.length} medicamento(s) vencen en los próximos 60 días</div>
+                      {expiringMeds.slice(0, 3).map((m, i) => (
+                        <div key={i} style={{ fontSize: '13px', color: '#721c24', marginTop: '4px' }}>
+                          • {m.nombre} — vence {new Date(m.fecha_vencimiento).toLocaleDateString()}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '15px', background: '#d4edda', borderRadius: '8px', border: '1px solid #c3e6cb' }}>
+                    <i className="fas fa-check-circle" style={{ fontSize: '24px', color: '#31ce36' }}></i>
+                    <div>
+                      <div style={{ fontWeight: '600', color: '#155724' }}>Medicamentos en buen estado</div>
+                      <div style={{ fontSize: '14px', color: '#6c757d' }}>Ningún medicamento vence en los próximos 60 días</div>
+                    </div>
+                  </div>
+                )}
+
+                {upcomingVaccinations.length === 0 && expiringMeds.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#6c757d' }}>
+                    <i className="fas fa-shield-alt" style={{ fontSize: '48px', marginBottom: '10px', color: '#31ce36', opacity: 0.7 }}></i>
+                    <h5 style={{ color: '#155724' }}>Todo en orden</h5>
+                    <p>No hay alertas sanitarias activas</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
