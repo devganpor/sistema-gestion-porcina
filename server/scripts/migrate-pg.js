@@ -27,13 +27,15 @@ async function createTables() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    // Agregar UNIQUE constraint a nombre si no existe (para DBs ya creadas)
+    // Limpiar duplicados y agregar UNIQUE constraint a razas.nombre
     await client.query(`
       DO $$ BEGIN
         IF NOT EXISTS (
           SELECT 1 FROM pg_constraint
           WHERE conname = 'razas_nombre_key' AND conrelid = 'razas'::regclass
         ) THEN
+          DELETE FROM razas r1 USING razas r2
+          WHERE r1.id > r2.id AND LOWER(r1.nombre) = LOWER(r2.nombre);
           ALTER TABLE razas ADD CONSTRAINT razas_nombre_key UNIQUE (nombre);
         END IF;
       END $$;
@@ -50,13 +52,15 @@ async function createTables() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    // Agregar UNIQUE constraint a nombre si no existe (para DBs ya creadas)
+    // Limpiar duplicados y agregar UNIQUE constraint a ubicaciones.nombre
     await client.query(`
       DO $$ BEGIN
         IF NOT EXISTS (
           SELECT 1 FROM pg_constraint
           WHERE conname = 'ubicaciones_nombre_key' AND conrelid = 'ubicaciones'::regclass
         ) THEN
+          DELETE FROM ubicaciones u1 USING ubicaciones u2
+          WHERE u1.id > u2.id AND LOWER(u1.nombre) = LOWER(u2.nombre);
           ALTER TABLE ubicaciones ADD CONSTRAINT ubicaciones_nombre_key UNIQUE (nombre);
         END IF;
       END $$;
