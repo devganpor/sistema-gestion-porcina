@@ -207,8 +207,7 @@ const Reproduction: React.FC = () => {
           fecha_parto_real: formData.fecha_parto_real,
           lechones_vivos: parseInt(formData.lechones_vivos) || 0,
           lechones_muertos: parseInt(formData.lechones_muertos) || 0,
-          peso_promedio: formData.peso_promedio ? parseFloat(formData.peso_promedio) : null,
-          observaciones_parto: formData.observaciones_parto || null
+          observaciones: formData.observaciones_parto || null
         };
         endpoint = `/reproduction/cycles/${selectedCycle.id}/birth`;
         
@@ -664,9 +663,16 @@ const Reproduction: React.FC = () => {
                             <button 
                               className="btn btn-danger btn-sm" 
                               title="Eliminar"
-                              onClick={() => {
+                              onClick={async () => {
                                 if (window.confirm('¿Estás seguro de eliminar este ciclo?')) {
-                                  // Implementar eliminación
+                                  try {
+                                    await api.delete(`/reproduction/cycles/${cycle.id}`);
+                                    setSuccess('Ciclo eliminado exitosamente');
+                                    loadCycles();
+                                    setTimeout(() => setSuccess(''), 3000);
+                                  } catch (error) {
+                                    alert('Error eliminando ciclo');
+                                  }
                                 }
                               }}
                             >

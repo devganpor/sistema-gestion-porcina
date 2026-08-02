@@ -144,14 +144,31 @@ router.get('/boars', authenticateToken, async (req, res) => {
 
 router.put('/cycles/:id', authenticateToken, async (req, res) => {
   try {
-    const { cerda_id, fecha_inicio } = req.body;
+    const { cerda_id, fecha_inicio, fecha_celo, fecha_servicio, verraco_id, observaciones } = req.body;
     await query(
-      'UPDATE ciclos_reproductivos SET cerda_id=$1, fecha_inicio=$2 WHERE id=$3',
-      [cerda_id, fecha_inicio, req.params.id]
+      `UPDATE ciclos_reproductivos SET cerda_id=$1, fecha_inicio=COALESCE($2, fecha_inicio),
+       fecha_celo=$3, fecha_servicio=$4, verraco_id=$5, observaciones=$6
+       WHERE id=$7`,
+      [cerda_id, fecha_inicio, fecha_celo || null, fecha_servicio || null, verraco_id || null, observaciones || null, req.params.id]
     );
     res.json({ message: 'Ciclo actualizado exitosamente' });
   } catch (error) {
     res.status(500).json({ error: 'Error actualizando ciclo' });
+  }
+});
+
+router.post('/cycles/:id/birth', authenticateToken, async (req, res) => {
+  try {
+    const { fecha_parto_real, lechones_vivos, lechones_muertos, observaciones } = req.body;
+    await query(
+      `UPDATE ciclos_reproductivos
+       SET fecha_parto_real=$1, lechones_vivos=$2, lechones_muertos=$3, observaciones=$4, estado='parto'
+       WHERE id=$5`,
+      [fecha_parto_real, lechones_vivos || 0, lechones_muertos || 0, observaciones || null, req.params.id]
+    );
+    res.status(201).json({ message: 'Parto registrado exitosamente' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error registrando parto' });
   }
 });
 

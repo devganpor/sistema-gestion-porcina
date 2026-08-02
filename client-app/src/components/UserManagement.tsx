@@ -50,17 +50,18 @@ const UserManagement: React.FC = () => {
     e.preventDefault();
     try {
       if (editingId) {
-        await api.put(`/users/${editingId}`, formData);
-        alert('Usuario actualizado correctamente');
+        const payload: any = { nombre: formData.nombre, email: formData.email, rol: formData.rol, activo: formData.activo };
+        await api.put(`/users/${editingId}`, payload);
+        if (formData.password) {
+          await api.put(`/users/${editingId}/password`, { newPassword: formData.password });
+        }
       } else {
         await api.post('/users', formData);
-        alert('Usuario creado exitosamente');
       }
       resetForm();
       loadUsers();
-    } catch (error) {
-      console.error('Error guardando usuario:', error);
-      alert('Error guardando usuario');
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Error guardando usuario');
     }
   };
 
@@ -88,13 +89,16 @@ const UserManagement: React.FC = () => {
     setShowForm(true);
   };
 
-  const handleToggleStatus = async (userId: number, currentStatus: boolean) => {
+  const handleToggleStatus = async (user: User) => {
     try {
-      await api.put(`/users/${userId}`, { activo: !currentStatus });
-      alert(`Usuario ${!currentStatus ? 'activado' : 'desactivado'} correctamente`);
+      await api.put(`/users/${user.id}`, {
+        nombre: user.nombre,
+        email: user.email,
+        rol: user.rol,
+        activo: !user.activo
+      });
       loadUsers();
     } catch (error) {
-      console.error('Error cambiando estado:', error);
       alert('Error cambiando estado del usuario');
     }
   };
@@ -353,7 +357,7 @@ const UserManagement: React.FC = () => {
                           <button 
                             className={`btn ${user.activo ? 'btn-danger' : 'btn-success'} btn-sm`}
                             title={user.activo ? 'Desactivar' : 'Activar'}
-                            onClick={() => handleToggleStatus(user.id, user.activo)}
+                            onClick={() => handleToggleStatus(user)}
                           >
                             <i className={`fas ${user.activo ? 'fa-ban' : 'fa-check'}`}></i>
                           </button>

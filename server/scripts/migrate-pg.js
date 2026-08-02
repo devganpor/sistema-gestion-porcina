@@ -109,6 +109,14 @@ async function createTables() {
       )
     `);
 
+    // Agregar fecha_celo si no existe (migracion)
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ciclos_reproductivos' AND column_name='fecha_celo')
+        THEN ALTER TABLE ciclos_reproductivos ADD COLUMN fecha_celo DATE; END IF;
+      END $$;
+    `);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS medicamentos (
         id SERIAL PRIMARY KEY,
