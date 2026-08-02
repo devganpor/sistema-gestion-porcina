@@ -188,6 +188,25 @@ router.post('/bulk', authenticateToken, asyncHandler(async (req, res) => {
       if (!ubicacion_actual_id) errores.push(`ubicacion '${row.ubicacion}' no encontrada (use nombre exacto)`);
     }
 
+    // Campos de trazabilidad
+    const VALID_ORIGENES = ['nacimiento', 'compra'];
+    const origen = row.origen ? (row.origen || '').toString().trim().toLowerCase() : 'nacimiento';
+    if (!VALID_ORIGENES.includes(origen)) errores.push(`origen debe ser: ${VALID_ORIGENES.join(', ')}`);
+
+    let valor_compra = 0;
+    if (row.valor_compra !== undefined && row.valor_compra !== '') {
+      const vc = parseFloat(row.valor_compra);
+      if (isNaN(vc) || vc < 0) errores.push('valor_compra debe ser un número mayor o igual a 0');
+      else valor_compra = vc;
+    }
+
+    let fecha_ingreso = null;
+    if (row.fecha_ingreso) {
+      const fi = new Date(row.fecha_ingreso);
+      if (isNaN(fi.getTime())) errores.push('fecha_ingreso formato inválido (use YYYY-MM-DD)');
+      else fecha_ingreso = fi.toISOString().split('T')[0];
+    }
+
     if (errores.length > 0) {
       results.push({ fila, identificador_unico: id || `(fila ${fila})`, estado: 'error', errores });
     } else {
@@ -197,6 +216,7 @@ router.post('/bulk', authenticateToken, asyncHandler(async (req, res) => {
         nombre: (row.nombre || '').toString().trim() || null,
         sexo, categoria, estado,
         fecha_nacimiento, peso_nacimiento, raza_id, ubicacion_actual_id,
+        origen, valor_compra, fecha_ingreso,
         observaciones: (row.observaciones || '').toString().trim() || null
       });
     }
@@ -211,10 +231,12 @@ router.post('/bulk', authenticateToken, asyncHandler(async (req, res) => {
         try {
           await client.query(
             `INSERT INTO animales (identificador_unico, nombre, sexo, categoria, estado,
-             fecha_nacimiento, peso_nacimiento, raza_id, ubicacion_actual_id, observaciones)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+             fecha_nacimiento, peso_nacimiento, raza_id, ubicacion_actual_id,
+             origen, valor_compra, fecha_ingreso, observaciones)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
             [a.identificador_unico, a.nombre, a.sexo, a.categoria, a.estado,
-             a.fecha_nacimiento, a.peso_nacimiento, a.raza_id, a.ubicacion_actual_id, a.observaciones]
+             a.fecha_nacimiento, a.peso_nacimiento, a.raza_id, a.ubicacion_actual_id,
+             a.origen, a.valor_compra, a.fecha_ingreso, a.observaciones]
           );
           results.push({ fila: a.fila, identificador_unico: a.identificador_unico, estado: 'ok', errores: [] });
         } catch (err) {

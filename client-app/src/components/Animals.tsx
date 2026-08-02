@@ -341,19 +341,17 @@ const Animals: React.FC = () => {
 
   const downloadTemplate = () => {
     const headers = [
-      ['identificador_unico','nombre','sexo','categoria','fecha_nacimiento','peso_nacimiento','raza','ubicacion','estado','observaciones']
+      ['identificador_unico','nombre','sexo','categoria','fecha_nacimiento','peso_nacimiento','raza','ubicacion','estado','origen','valor_compra','fecha_ingreso','observaciones']
     ];
     const ejemplos = [
-      ['CER001','Bella','hembra','reproductor','2023-05-15','1.4','Yorkshire','Corral 1','activo','Cerda de alta produccion'],
-      ['CER002','','macho','engorde','2024-01-10','1.6','Duroc','Galpon B','activo',''],
-      ['CER003','','hembra','lechon','2025-03-01','1.2','Landrace','Maternidad','activo','']
+      ['CER001','Bella','hembra','reproductor','2023-05-15','1.4','Yorkshire','Corral 1','activo','compra',350000,'2023-05-15','Cerda de alta produccion'],
+      ['CER002','','macho','engorde','2024-01-10','1.6','Duroc','Galpon B','activo','nacimiento',0,'2024-01-10',''],
+      ['CER003','','hembra','lechon','2025-03-01','1.2','Landrace','Maternidad','activo','nacimiento',0,'2025-03-01','']
     ];
     const ws = XLSX.utils.aoa_to_sheet([...headers, ...ejemplos]);
-    // Ancho de columnas
-    ws['!cols'] = [20,15,10,14,18,16,14,14,10,30].map(w => ({ wch: w }));
+    ws['!cols'] = [20,15,10,14,18,16,14,14,10,12,14,14,30].map(w => ({ wch: w }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Animales');
-    // Hoja de referencia
     const ref = XLSX.utils.aoa_to_sheet([
       ['CAMPO','REQUERIDO','VALORES VALIDOS / FORMATO'],
       ['identificador_unico','SI','Texto unico, max 50 caracteres'],
@@ -365,9 +363,12 @@ const Animals: React.FC = () => {
       ['raza','NO','Nombre exacto de raza registrada en el sistema'],
       ['ubicacion','NO','Nombre exacto de ubicacion registrada en el sistema'],
       ['estado','NO','activo (default) | vendido | muerto | eliminado'],
+      ['origen','NO','nacimiento (default) | compra'],
+      ['valor_compra','NO','Numero decimal — costo de compra o valor de ingreso (ej: 350000). 0 si nacio en granja'],
+      ['fecha_ingreso','NO','YYYY-MM-DD — fecha en que entro a la granja (ej: 2024-03-15)'],
       ['observaciones','NO','Texto libre']
     ]);
-    ref['!cols'] = [22,12,45].map(w => ({ wch: w }));
+    ref['!cols'] = [22,12,55].map(w => ({ wch: w }));
     XLSX.utils.book_append_sheet(wb, ref, 'Referencia');
     XLSX.writeFile(wb, 'plantilla_carga_animales.xlsx');
   };
