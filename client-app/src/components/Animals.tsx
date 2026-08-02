@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import api from '../services/authService';
 import FormField from './FormField';
 
@@ -30,6 +31,14 @@ const Animals: React.FC = () => {
   const [filterSex, setFilterSex] = useState('');
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [success, setSuccess] = useState('');
+
+  // Carga masiva
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkRows, setBulkRows] = useState<any[]>([]);
+  const [bulkResults, setBulkResults] = useState<{fila:number;identificador_unico:string;estado:string;errores:string[]}[]>([]);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkDone, setBulkDone] = useState(false);
   
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -248,6 +257,74 @@ const Animals: React.FC = () => {
     }
   };
 
+  const downloadTemplate = () => {
+    const headers = [
+      ['identificador_unico','nombre','sexo','categoria','fecha_nacimiento','peso_nacimiento','raza','ubicacion','estado','observaciones']
+    ];
+    const ejemplos = [
+      ['CER001','Bella','hembra','reproductor','2023-05-15','1.4','Yorkshire','Corral 1','activo','Cerda de alta produccion'],
+      ['CER002','','macho','engorde','2024-01-10','1.6','Duroc','Galpon B','activo',''],
+      ['CER003','','hembra','lechon','2025-03-01','1.2','Landrace','Maternidad','activo','']
+    ];
+    const ws = XLSX.utils.aoa_to_sheet([...headers, ...ejemplos]);
+    // Ancho de columnas
+    ws['!cols'] = [20,15,10,14,18,16,14,14,10,30].map(w => ({ wch: w }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Animales');
+    // Hoja de referencia
+    const ref = XLSX.utils.aoa_to_sheet([
+      ['CAMPO','REQUERIDO','VALORES VALIDOS / FORMATO'],
+      ['identificador_unico','SI','Texto unico, max 50 caracteres'],
+      ['nombre','NO','Texto libre'],
+      ['sexo','SI','macho | hembra'],
+      ['categoria','SI','lechon | recria | desarrollo | engorde | reproductor'],
+      ['fecha_nacimiento','NO','YYYY-MM-DD  (ej: 2024-03-15)'],
+      ['peso_nacimiento','NO','Numero decimal en kg  (ej: 1.4)'],
+      ['raza','NO','Nombre exacto de raza registrada en el sistema'],
+      ['ubicacion','NO','Nombre exacto de ubicacion registrada en el sistema'],
+      ['estado','NO','activo (default) | vendido | muerto | eliminado'],
+      ['observaciones','NO','Texto libre']
+    ]);
+    ref['!cols'] = [22,12,45].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, ref, 'Referencia');
+    XLSX.writeFile(wb, 'plantilla_carga_animales.xlsx');
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+      const wb = XLSX.read(data, { type: 'array', cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      setBulkRows(rows);
+      setBulkResults([]);
+      setBulkDone(false);
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+  };
+
+  const handleBulkUpload = async () => {
+    if (bulkRows.length === 0) return;
+    setBulkLoading(true);
+    try {
+      const res = await api.post('/animals/bulk', { animales: bulkRows });
+      setBulkResults(res.data.resultados);
+      setBulkDone(true);
+      const ok = res.data.insertados;
+      if (ok > 0) { loadAnimals(); setSuccess(`${ok} animales importados exitosamente`); setTimeout(() => setSuccess(''), 4000); }
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Error en la carga masiva');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const resetBulk = () => { setBulkRows([]); setBulkResults([]); setBulkDone(false); setShowBulkModal(false); };
+
   if (loading && animals.length === 0) return (
     <div className="page-inner">
       <div className="card">
@@ -283,14 +360,24 @@ const Animals: React.FC = () => {
                 Control total de tu ganado porcino
               </p>
             </div>
-            <button 
-              className="btn btn-outline" 
-              onClick={handleCreate}
-              style={{ background: 'rgba(255,255,255,0.1)', border: '2px solid rgba(255,255,255,0.3)', color: 'white' }}
-            >
-              <i className="fas fa-plus" style={{ marginRight: '8px' }}></i>
-              Nuevo Animal
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                className="btn btn-outline"
+                onClick={() => { setBulkRows([]); setBulkResults([]); setBulkDone(false); setShowBulkModal(true); }}
+                style={{ background: 'rgba(255,255,255,0.1)', border: '2px solid rgba(255,255,255,0.3)', color: 'white' }}
+              >
+                <i className="fas fa-file-excel" style={{ marginRight: '8px' }}></i>
+                Carga Masiva
+              </button>
+              <button 
+                className="btn btn-outline" 
+                onClick={handleCreate}
+                style={{ background: 'rgba(255,255,255,0.1)', border: '2px solid rgba(255,255,255,0.3)', color: 'white' }}
+              >
+                <i className="fas fa-plus" style={{ marginRight: '8px' }}></i>
+                Nuevo Animal
+              </button>
+            </div>
           </div>
         </div>
 
@@ -720,6 +807,166 @@ const Animals: React.FC = () => {
                   </div>
                 </form>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal Carga Masiva */}
+      {showBulkModal && (
+        <div className="modal-overlay" onClick={resetBulk}>
+          <div className="modal-content" style={{ maxWidth: '860px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="card-header">
+              <h5 className="card-title">
+                <i className="fas fa-file-excel" style={{ marginRight: '10px', color: '#31ce36' }}></i>
+                Carga Masiva de Animales
+              </h5>
+              <button onClick={resetBulk} style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#6c757d' }}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+
+            <div style={{ padding: '25px' }}>
+              {/* Paso 1: Descargar plantilla */}
+              <div style={{ background: '#f0f7ff', border: '1px solid #bee3f8', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                  <div>
+                    <div style={{ fontWeight: '700', color: '#1a2035', marginBottom: '4px' }}>
+                      <i className="fas fa-download" style={{ marginRight: '8px', color: '#1572e8' }}></i>
+                      Paso 1 — Descarga la plantilla Excel
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#6c757d' }}>Incluye columnas requeridas, ejemplos y hoja de referencia con valores válidos.</div>
+                  </div>
+                  <button className="btn btn-primary" onClick={downloadTemplate}>
+                    <i className="fas fa-file-download" style={{ marginRight: '8px' }}></i>
+                    Descargar Plantilla
+                  </button>
+                </div>
+              </div>
+
+              {/* Paso 2: Subir archivo */}
+              <div style={{ background: '#f8f9fa', border: '2px dashed #dee2e6', borderRadius: '8px', padding: '20px', marginBottom: '20px', textAlign: 'center' }}>
+                <div style={{ fontWeight: '700', color: '#1a2035', marginBottom: '8px' }}>
+                  <i className="fas fa-upload" style={{ marginRight: '8px', color: '#ffad46' }}></i>
+                  Paso 2 — Sube tu archivo Excel (.xlsx)
+                </div>
+                <div style={{ fontSize: '13px', color: '#6c757d', marginBottom: '12px' }}>Máximo 500 filas por carga</div>
+                <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileChange} style={{ display: 'none' }} />
+                <button className="btn btn-warning" onClick={() => fileInputRef.current?.click()}>
+                  <i className="fas fa-folder-open" style={{ marginRight: '8px' }}></i>
+                  Seleccionar Archivo
+                </button>
+                {bulkRows.length > 0 && !bulkDone && (
+                  <div style={{ marginTop: '12px', padding: '10px', background: '#d4edda', borderRadius: '6px', color: '#155724', fontWeight: '600' }}>
+                    <i className="fas fa-check-circle" style={{ marginRight: '8px' }}></i>
+                    {bulkRows.length} filas detectadas — listas para validar y cargar
+                  </div>
+                )}
+              </div>
+
+              {/* Paso 3: Previsualización y carga */}
+              {bulkRows.length > 0 && !bulkDone && (
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <strong style={{ color: '#1a2035' }}>Vista previa ({Math.min(bulkRows.length, 5)} de {bulkRows.length} filas)</strong>
+                    <button className="btn btn-success" onClick={handleBulkUpload} disabled={bulkLoading}>
+                      <i className={`fas ${bulkLoading ? 'fa-spinner fa-spin' : 'fa-cloud-upload-alt'}`} style={{ marginRight: '8px' }}></i>
+                      {bulkLoading ? 'Procesando...' : `Cargar ${bulkRows.length} animales`}
+                    </button>
+                  </div>
+                  <div className="table-responsive">
+                    <table className="table" style={{ fontSize: '12px' }}>
+                      <thead>
+                        <tr>
+                          {Object.keys(bulkRows[0]).map(k => <th key={k}>{k}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bulkRows.slice(0, 5).map((row, i) => (
+                          <tr key={i}>
+                            {Object.values(row).map((v: any, j) => <td key={j}>{String(v)}</td>)}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {bulkRows.length > 5 && <div style={{ fontSize: '12px', color: '#6c757d', textAlign: 'center' }}>... y {bulkRows.length - 5} filas más</div>}
+                </div>
+              )}
+
+              {/* Resultados */}
+              {bulkDone && bulkResults.length > 0 && (() => {
+                const ok = bulkResults.filter(r => r.estado === 'ok');
+                const err = bulkResults.filter(r => r.estado === 'error');
+                return (
+                  <div>
+                    {/* Resumen */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                      <div style={{ background: '#d4edda', border: '1px solid #c3e6cb', borderRadius: '8px', padding: '16px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '32px', fontWeight: '700', color: '#155724' }}>{ok.length}</div>
+                        <div style={{ fontWeight: '600', color: '#155724' }}>Importados correctamente</div>
+                      </div>
+                      <div style={{ background: err.length > 0 ? '#f8d7da' : '#d4edda', border: `1px solid ${err.length > 0 ? '#f5c6cb' : '#c3e6cb'}`, borderRadius: '8px', padding: '16px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '32px', fontWeight: '700', color: err.length > 0 ? '#721c24' : '#155724' }}>{err.length}</div>
+                        <div style={{ fontWeight: '600', color: err.length > 0 ? '#721c24' : '#155724' }}>Con errores</div>
+                      </div>
+                    </div>
+
+                    {/* Tabla de errores */}
+                    {err.length > 0 && (
+                      <div>
+                        <div style={{ fontWeight: '700', color: '#721c24', marginBottom: '10px' }}>
+                          <i className="fas fa-exclamation-triangle" style={{ marginRight: '8px' }}></i>
+                          Filas con errores — corrígelas en el Excel y vuelve a cargar
+                        </div>
+                        <div className="table-responsive">
+                          <table className="table" style={{ fontSize: '13px' }}>
+                            <thead>
+                              <tr style={{ background: '#f8d7da' }}>
+                                <th>Fila</th>
+                                <th>Identificador</th>
+                                <th>Errores encontrados</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {err.map((r, i) => (
+                                <tr key={i} style={{ background: '#fff5f5' }}>
+                                  <td style={{ fontWeight: '700', color: '#721c24' }}>{r.fila}</td>
+                                  <td style={{ fontWeight: '600' }}>{r.identificador_unico}</td>
+                                  <td>
+                                    {r.errores.map((e, j) => (
+                                      <div key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '3px' }}>
+                                        <i className="fas fa-times-circle" style={{ color: '#f25961', marginTop: '2px', flexShrink: 0 }}></i>
+                                        <span>{e}</span>
+                                      </div>
+                                    ))}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {err.length === 0 && (
+                      <div style={{ textAlign: 'center', padding: '20px', color: '#155724' }}>
+                        <i className="fas fa-check-circle" style={{ fontSize: '48px', marginBottom: '10px' }}></i>
+                        <h5>¡Carga completada sin errores!</h5>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
+                      {err.length > 0 && (
+                        <button className="btn btn-warning" onClick={() => { setBulkRows([]); setBulkResults([]); setBulkDone(false); }}>
+                          <i className="fas fa-redo" style={{ marginRight: '8px' }}></i>
+                          Cargar otro archivo
+                        </button>
+                      )}
+                      <button className="btn btn-secondary" onClick={resetBulk}>Cerrar</button>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>

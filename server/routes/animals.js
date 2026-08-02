@@ -116,6 +116,121 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+router.post('/bulk', authenticateToken, asyncHandler(async (req, res) => {
+  const { animales } = req.body;
+  if (!Array.isArray(animales) || animales.length === 0)
+    throw new AppError('Se requiere un arreglo de animales', 400);
+  if (animales.length > 500)
+    throw new AppError('Máximo 500 animales por carga', 400);
+
+  // Cargar catálogos para validar nombres
+  const [razasRes, ubicacionesRes, animalesRes] = await Promise.all([
+    query('SELECT id, LOWER(nombre) as nombre FROM razas'),
+    query('SELECT id, LOWER(nombre) as nombre FROM ubicaciones'),
+    query('SELECT id, LOWER(identificador_unico) as identificador_unico FROM animales')
+  ]);
+  const razaMap = new Map(razasRes.rows.map(r => [r.nombre, r.id]));
+  const ubicacionMap = new Map(ubicacionesRes.rows.map(r => [r.nombre, r.id]));
+  const existingIds = new Set(animalesRes.rows.map(r => r.identificador_unico));
+
+  const VALID_SEXOS = ['macho', 'hembra'];
+  const VALID_CATEGORIAS = ['lechon', 'recria', 'desarrollo', 'engorde', 'reproductor'];
+  const VALID_ESTADOS = ['activo', 'vendido', 'muerto', 'eliminado'];
+
+  const results = [];
+  const toInsert = [];
+
+  animales.forEach((row, i) => {
+    const fila = i + 2; // fila Excel (encabezado = 1)
+    const errores = [];
+
+    const id = (row.identificador_unico || '').toString().trim();
+    if (!id) errores.push('identificador_unico es requerido');
+    else if (id.length > 50) errores.push('identificador_unico máximo 50 caracteres');
+    else if (existingIds.has(id.toLowerCase())) errores.push(`identificador_unico '${id}' ya existe en el sistema`);
+
+    const sexo = (row.sexo || '').toString().trim().toLowerCase();
+    if (!VALID_SEXOS.includes(sexo)) errores.push(`sexo debe ser: ${VALID_SEXOS.join(', ')}`);
+
+    const categoria = (row.categoria || '').toString().trim().toLowerCase();
+    if (!VALID_CATEGORIAS.includes(categoria)) errores.push(`categoria debe ser: ${VALID_CATEGORIAS.join(', ')}`);
+
+    const estado = row.estado ? (row.estado || '').toString().trim().toLowerCase() : 'activo';
+    if (!VALID_ESTADOS.includes(estado)) errores.push(`estado debe ser: ${VALID_ESTADOS.join(', ')}`);
+
+    let fecha_nacimiento = null;
+    if (row.fecha_nacimiento) {
+      const d = new Date(row.fecha_nacimiento);
+      if (isNaN(d.getTime())) errores.push('fecha_nacimiento formato inválido (use YYYY-MM-DD)');
+      else fecha_nacimiento = d.toISOString().split('T')[0];
+    }
+
+    let peso_nacimiento = null;
+    if (row.peso_nacimiento !== undefined && row.peso_nacimiento !== '') {
+      const p = parseFloat(row.peso_nacimiento);
+      if (isNaN(p) || p <= 0 || p > 10) errores.push('peso_nacimiento debe ser número entre 0 y 10');
+      else peso_nacimiento = p;
+    }
+
+    let raza_id = null;
+    if (row.raza) {
+      raza_id = razaMap.get(row.raza.toString().trim().toLowerCase()) || null;
+      if (!raza_id) errores.push(`raza '${row.raza}' no encontrada (use nombre exacto)`);
+    }
+
+    let ubicacion_actual_id = null;
+    if (row.ubicacion) {
+      ubicacion_actual_id = ubicacionMap.get(row.ubicacion.toString().trim().toLowerCase()) || null;
+      if (!ubicacion_actual_id) errores.push(`ubicacion '${row.ubicacion}' no encontrada (use nombre exacto)`);
+    }
+
+    if (errores.length > 0) {
+      results.push({ fila, identificador_unico: id || `(fila ${fila})`, estado: 'error', errores });
+    } else {
+      toInsert.push({
+        fila,
+        identificador_unico: id,
+        nombre: (row.nombre || '').toString().trim() || null,
+        sexo, categoria, estado,
+        fecha_nacimiento, peso_nacimiento, raza_id, ubicacion_actual_id,
+        observaciones: (row.observaciones || '').toString().trim() || null
+      });
+    }
+  });
+
+  // Insertar válidos en transacción
+  if (toInsert.length > 0) {
+    const client = await require('../config/database-pg').pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const a of toInsert) {
+        try {
+          await client.query(
+            `INSERT INTO animales (identificador_unico, nombre, sexo, categoria, estado,
+             fecha_nacimiento, peso_nacimiento, raza_id, ubicacion_actual_id, observaciones)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+            [a.identificador_unico, a.nombre, a.sexo, a.categoria, a.estado,
+             a.fecha_nacimiento, a.peso_nacimiento, a.raza_id, a.ubicacion_actual_id, a.observaciones]
+          );
+          results.push({ fila: a.fila, identificador_unico: a.identificador_unico, estado: 'ok', errores: [] });
+        } catch (err) {
+          results.push({ fila: a.fila, identificador_unico: a.identificador_unico, estado: 'error', errores: [err.detail || err.message] });
+        }
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  const ok = results.filter(r => r.estado === 'ok').length;
+  const errCount = results.filter(r => r.estado === 'error').length;
+  res.json({ insertados: ok, errores: errCount, resultados: results });
+}));
+
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
