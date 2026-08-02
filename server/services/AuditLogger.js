@@ -118,6 +118,7 @@ class AuditLogger {
   // Rotar logs cuando sean muy grandes
   rotateLogs() {
     try {
+      if (!fs.existsSync(this.logFile)) return;
       const stats = fs.statSync(this.logFile);
       const maxSize = 10 * 1024 * 1024; // 10MB
 

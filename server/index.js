@@ -37,6 +37,9 @@ const backupService = new BackupService();
 const auditLogger = new AuditLogger();
 const PORT = process.env.PORT || 3001;
 
+// Necesario para Railway/proxies: permite leer IP real del cliente
+app.set('trust proxy', 1);
+
 // Rate limiting global (excluding auth)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
