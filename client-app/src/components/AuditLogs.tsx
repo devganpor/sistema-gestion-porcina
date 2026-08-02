@@ -21,11 +21,11 @@ interface AuditLog {
 }
 
 interface Stats {
-  totales: { total: number; exitosos: number; fallidos: number };
-  por_accion: { accion: string; total: number }[];
-  por_modulo: { modulo: string; total: number }[];
-  por_usuario: { usuario_nombre: string; usuario_email: string; total: number }[];
-  por_dia: { fecha: string; total: number }[];
+  totales: { total: string | number; exitosos: string | number; fallidos: string | number };
+  por_accion: { accion: string; total: string | number }[];
+  por_modulo: { modulo: string; total: string | number }[];
+  por_usuario: { usuario_nombre: string; usuario_email: string; total: string | number }[];
+  por_dia: { fecha: string; total: string | number }[];
   fallidos: AuditLog[];
 }
 
@@ -278,9 +278,9 @@ const AuditLogs: React.FC = () => {
               {/* Totales */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px', marginBottom: '24px' }}>
                 {[
-                  { label: 'Total Eventos', value: parseInt(stats.totales.total).toLocaleString(), color: '#1572e8', icon: 'fa-list' },
-                  { label: 'Exitosos', value: parseInt(stats.totales.exitosos).toLocaleString(), color: '#31ce36', icon: 'fa-check-circle' },
-                  { label: 'Fallidos', value: parseInt(stats.totales.fallidos).toLocaleString(), color: '#f25961', icon: 'fa-times-circle' },
+                  { label: 'Total Eventos', value: Number(stats.totales.total).toLocaleString(), color: '#1572e8', icon: 'fa-list' },
+                  { label: 'Exitosos', value: Number(stats.totales.exitosos).toLocaleString(), color: '#31ce36', icon: 'fa-check-circle' },
+                  { label: 'Fallidos', value: Number(stats.totales.fallidos).toLocaleString(), color: '#f25961', icon: 'fa-times-circle' },
                 ].map((s, i) => (
                   <div key={i} style={{ background: 'white', border: `2px solid ${s.color}20`, borderRadius: '10px', padding: '16px', textAlign: 'center' }}>
                     <i className={`fas ${s.icon}`} style={{ fontSize: '24px', color: s.color, marginBottom: '8px', display: 'block' }}></i>
@@ -299,14 +299,14 @@ const AuditLogs: React.FC = () => {
                   </h6>
                   {stats.por_accion.map((a, i) => {
                     const cfg = ACCION_CONFIG[a.accion] || { color: '#6c757d', icon: 'fa-circle', label: a.accion };
-                    const pct = Math.round(parseInt(a.total as any) / parseInt(stats.totales.total as any) * 100);
+                    const pct = Math.round(Number(a.total) / Number(stats.totales.total) * 100);
                     return (
                       <div key={i} style={{ marginBottom: '10px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                           <span style={{ fontSize: '13px', fontWeight: '600', color: cfg.color }}>
                             <i className={`fas ${cfg.icon}`} style={{ marginRight: '6px' }}></i>{cfg.label}
                           </span>
-                          <span style={{ fontSize: '13px', fontWeight: '700' }}>{parseInt(a.total as any).toLocaleString()}</span>
+                          <span style={{ fontSize: '13px', fontWeight: '700' }}>{Number(a.total).toLocaleString()}</span>
                         </div>
                         <div style={{ height: '6px', background: '#dee2e6', borderRadius: '3px' }}>
                           <div style={{ height: '100%', width: `${pct}%`, background: cfg.color, borderRadius: '3px', transition: 'width 0.5s' }}></div>
@@ -323,12 +323,12 @@ const AuditLogs: React.FC = () => {
                     Módulos más activos
                   </h6>
                   {stats.por_modulo.map((m, i) => {
-                    const pct = Math.round(parseInt(m.total as any) / parseInt(stats.totales.total as any) * 100);
+                    const pct = Math.round(Number(m.total) / Number(stats.totales.total) * 100);
                     return (
                       <div key={i} style={{ marginBottom: '10px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                           <span style={{ fontSize: '13px', fontWeight: '600' }}>{m.modulo}</span>
-                          <span style={{ fontSize: '13px', fontWeight: '700' }}>{parseInt(m.total as any).toLocaleString()}</span>
+                          <span style={{ fontSize: '13px', fontWeight: '700' }}>{Number(m.total).toLocaleString()}</span>
                         </div>
                         <div style={{ height: '6px', background: '#dee2e6', borderRadius: '3px' }}>
                           <div style={{ height: '100%', width: `${pct}%`, background: '#1572e8', borderRadius: '3px', transition: 'width 0.5s' }}></div>
@@ -356,7 +356,7 @@ const AuditLogs: React.FC = () => {
                           <td style={{ fontWeight: '600' }}>{u.usuario_nombre || '—'}</td>
                           <td style={{ color: '#6c757d' }}>{u.usuario_email}</td>
                           <td style={{ textAlign: 'right', fontWeight: '700', color: '#1572e8' }}>
-                            {parseInt(u.total as any).toLocaleString()}
+                            {Number(u.total).toLocaleString()}
                           </td>
                         </tr>
                       ))}
