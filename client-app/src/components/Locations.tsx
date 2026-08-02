@@ -265,9 +265,9 @@ const Locations: React.FC = () => {
                   required
                 >
                   <option value="">Seleccionar ubicación</option>
-                  {corrales.map(ubicacion => (
+                  {ubicaciones.map(ubicacion => (
                     <option key={ubicacion.id} value={ubicacion.id}>
-                      {ubicacion.nombre} ({ubicacion.animales_actuales}/{ubicacion.capacidad_maxima || '∞'})
+                      {ubicacion.nombre} ({ubicacion.tipo}) — {ubicacion.animales_actuales}/{ubicacion.capacidad_maxima || '∞'}
                     </option>
                   ))}
                 </select>
@@ -341,16 +341,19 @@ const Locations: React.FC = () => {
               border: '1px solid #dee2e6',
               borderRadius: '4px'
             }}>
-              <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>{ubicacion.nombre}</div>
-              <div style={{ fontSize: '14px', color: '#666' }}>
-                Animales: {ubicacion.animales_actuales}
-                {ubicacion.capacidad_maxima && ` / ${ubicacion.capacidad_maxima}`}
-              </div>
-              {ubicacion.ubicacion_padre_nombre && (
-                <div style={{ fontSize: '12px', color: '#999' }}>
-                  En: {ubicacion.ubicacion_padre_nombre}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>{ubicacion.nombre}</div>
+                  <div style={{ fontSize: '14px', color: '#666' }}>
+                    Animales: {ubicacion.animales_actuales}
+                    {ubicacion.capacidad_maxima && ` / ${ubicacion.capacidad_maxima}`}
+                  </div>
                 </div>
-              )}
+                <div style={{ display: 'flex', gap: '5px' }}>
+                  <button className="btn btn-warning btn-sm" onClick={() => handleEdit(ubicacion)} title="Editar">✏️</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(ubicacion.id)} title="Eliminar">🗑️</button>
+                </div>
+              </div>
             </div>
           ))}
         </div>}
@@ -367,28 +370,22 @@ const Locations: React.FC = () => {
                 border: '1px solid #dee2e6',
                 borderRadius: '4px'
               }}>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center',
-                  marginBottom: '5px'
-                }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
                   <span style={{ fontWeight: 'bold' }}>{ubicacion.nombre}</span>
-                  <span style={{
-                    padding: '2px 8px',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    backgroundColor: getOcupacionColor(ubicacion.animales_actuales, ubicacion.capacidad_maxima),
-                    color: 'white'
-                  }}>
-                    {ubicacion.animales_actuales}/{ubicacion.capacidad_maxima || '∞'}
-                  </span>
-                </div>
-                {ubicacion.ubicacion_padre_nombre && (
-                  <div style={{ fontSize: '12px', color: '#999' }}>
-                    En: {ubicacion.ubicacion_padre_nombre}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <span style={{
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      backgroundColor: getOcupacionColor(ubicacion.animales_actuales, ubicacion.capacidad_maxima),
+                      color: 'white'
+                    }}>
+                      {ubicacion.animales_actuales}/{ubicacion.capacidad_maxima || '∞'}
+                    </span>
+                    <button className="btn btn-warning btn-sm" onClick={() => handleEdit(ubicacion)} title="Editar">✏️</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(ubicacion.id)} title="Eliminar">🗑️</button>
                   </div>
-                )}
+                </div>
                 {ubicacion.capacidad_maxima && (
                   <div style={{ fontSize: '12px', color: '#666' }}>
                     Ocupación: {Math.round((ubicacion.animales_actuales / ubicacion.capacidad_maxima) * 100)}%

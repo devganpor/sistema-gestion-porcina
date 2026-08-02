@@ -711,29 +711,80 @@ const Reproduction: React.FC = () => {
           {activeTab === 'alertas' && (
             <div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '15px', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffeaa7' }}>
-                  <i className="fas fa-exclamation-triangle" style={{ fontSize: '24px', color: '#ffad46' }}></i>
-                  <div>
-                    <div style={{ fontWeight: '600', color: '#1a2035' }}>Partos Próximos (7 días)</div>
-                    <div style={{ fontSize: '14px', color: '#6c757d' }}>3 cerdas con parto esperado en los próximos 7 días</div>
-                  </div>
-                </div>
-                
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '15px', background: '#d1ecf1', borderRadius: '8px', border: '1px solid #bee5eb' }}>
-                  <i className="fas fa-heart" style={{ fontSize: '24px', color: '#1572e8' }}></i>
-                  <div>
-                    <div style={{ fontWeight: '600', color: '#1a2035' }}>Celos Esperados</div>
-                    <div style={{ fontSize: '14px', color: '#6c757d' }}>2 cerdas deberían estar en celo (21 días post-destete)</div>
-                  </div>
-                </div>
-                
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '15px', background: '#f8d7da', borderRadius: '8px', border: '1px solid #f5c6cb' }}>
-                  <i className="fas fa-redo" style={{ fontSize: '24px', color: '#f25961' }}></i>
-                  <div>
-                    <div style={{ fontWeight: '600', color: '#1a2035' }}>Repetición de Celos</div>
-                    <div style={{ fontSize: '14px', color: '#6c757d' }}>1 cerda con posible repetición de celo - verificar gestación</div>
-                  </div>
-                </div>
+                {(() => {
+                  const partosProximos = cycles.filter(c =>
+                    c.fecha_parto_esperado &&
+                    new Date(c.fecha_parto_esperado) >= new Date() &&
+                    new Date(c.fecha_parto_esperado) <= new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+                  );
+                  const gestantes = cycles.filter(c => c.estado === 'gestante');
+                  const sinServicio = cycles.filter(c => c.estado === 'abierto' || c.estado === 'celo');
+
+                  return (
+                    <>
+                      {partosProximos.length > 0 ? (
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '15px', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffeaa7' }}>
+                          <i className="fas fa-exclamation-triangle" style={{ fontSize: '24px', color: '#ffad46', marginTop: '2px' }}></i>
+                          <div>
+                            <div style={{ fontWeight: '600', color: '#1a2035' }}>Partos Próximos (7 días)</div>
+                            <div style={{ fontSize: '14px', color: '#6c757d', marginBottom: '6px' }}>{partosProximos.length} cerda(s) con parto esperado esta semana</div>
+                            {partosProximos.map((c, i) => (
+                              <div key={i} style={{ fontSize: '13px', color: '#856404' }}>
+                                • {c.cerda_identificador} — parto esperado {new Date(c.fecha_parto_esperado!).toLocaleDateString()}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '15px', background: '#d4edda', borderRadius: '8px', border: '1px solid #c3e6cb' }}>
+                          <i className="fas fa-check-circle" style={{ fontSize: '24px', color: '#31ce36' }}></i>
+                          <div>
+                            <div style={{ fontWeight: '600', color: '#155724' }}>Sin partos próximos</div>
+                            <div style={{ fontSize: '14px', color: '#6c757d' }}>No hay partos esperados en los próximos 7 días</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {gestantes.length > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '15px', background: '#d1ecf1', borderRadius: '8px', border: '1px solid #bee5eb' }}>
+                          <i className="fas fa-heart" style={{ fontSize: '24px', color: '#1572e8', marginTop: '2px' }}></i>
+                          <div>
+                            <div style={{ fontWeight: '600', color: '#1a2035' }}>Cerdas Gestantes</div>
+                            <div style={{ fontSize: '14px', color: '#6c757d', marginBottom: '6px' }}>{gestantes.length} cerda(s) en gestação activa</div>
+                            {gestantes.map((c, i) => (
+                              <div key={i} style={{ fontSize: '13px', color: '#0c5460' }}>
+                                • {c.cerda_identificador}{c.fecha_parto_esperado ? ` — parto esperado ${new Date(c.fecha_parto_esperado).toLocaleDateString()}` : ''}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {sinServicio.length > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '15px', background: '#f8d7da', borderRadius: '8px', border: '1px solid #f5c6cb' }}>
+                          <i className="fas fa-redo" style={{ fontSize: '24px', color: '#f25961', marginTop: '2px' }}></i>
+                          <div>
+                            <div style={{ fontWeight: '600', color: '#1a2035' }}>Pendientes de Servicio</div>
+                            <div style={{ fontSize: '14px', color: '#6c757d', marginBottom: '6px' }}>{sinServicio.length} cerda(s) en celo o ciclo abierto sin servicio registrado</div>
+                            {sinServicio.map((c, i) => (
+                              <div key={i} style={{ fontSize: '13px', color: '#721c24' }}>
+                                • {c.cerda_identificador} — estado: {c.estado}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {partosProximos.length === 0 && gestantes.length === 0 && sinServicio.length === 0 && (
+                        <div style={{ textAlign: 'center', padding: '30px', color: '#6c757d' }}>
+                          <i className="fas fa-shield-alt" style={{ fontSize: '48px', marginBottom: '10px', color: '#31ce36', opacity: 0.7 }}></i>
+                          <h5 style={{ color: '#155724' }}>Sin alertas activas</h5>
+                          <p>No hay eventos reproductivos urgentes</p>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           )}
