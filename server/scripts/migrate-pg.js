@@ -369,6 +369,7 @@ async function createTables() {
     console.log('✅ Índices creados exitosamente');
     console.log('📊 Insertando datos iniciales...');
 
+    // Solo insertar el usuario admin — razas y ubicaciones las crea el usuario desde la app
     const bcrypt = require('bcryptjs');
     const adminPassword = await bcrypt.hash('Admin2025!', 12);
 
@@ -377,39 +378,6 @@ async function createTables() {
       VALUES ($1, $2, $3, $4)
       ON CONFLICT (email) DO NOTHING
     `, ['admin@ganpor.com', adminPassword, 'Administrador', 'administrador']);
-
-    const razas = [
-      ['Yorkshire', 'Raza prolífica y maternal'],
-      ['Landrace', 'Excelente para producción de carne'],
-      ['Duroc', 'Buena ganancia de peso'],
-      ['Hampshire', 'Carne magra de calidad'],
-      ['Pietrain', 'Alta proporción de carne magra']
-    ];
-
-    for (const [nombre, descripcion] of razas) {
-      await client.query(`
-        INSERT INTO razas (nombre, descripcion)
-        VALUES ($1, $2)
-        ON CONFLICT DO NOTHING
-      `, [nombre, descripcion]);
-    }
-
-    const ubicaciones = [
-      ['Corral 1', 'corral', 20, 'Corral principal para reproductores'],
-      ['Corral 2', 'corral', 15, 'Corral secundario'],
-      ['Galpón A', 'galpon', 50, 'Galpón para lechones'],
-      ['Galpón B', 'galpon', 40, 'Galpón para engorde'],
-      ['Maternidad', 'maternidad', 10, 'Área de partos'],
-      ['Cuarentena', 'aislamiento', 5, 'Área de aislamiento']
-    ];
-
-    for (const [nombre, tipo, capacidad, descripcion] of ubicaciones) {
-      await client.query(`
-        INSERT INTO ubicaciones (nombre, tipo, capacidad_maxima, descripcion)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT DO NOTHING
-      `, [nombre, tipo, capacidad, descripcion]);
-    }
 
     // === TABLAS DE NUTRICIÓN ===
     await client.query(`
