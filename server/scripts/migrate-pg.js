@@ -197,6 +197,20 @@ async function createTables() {
     `);
 
     console.log('✅ Tablas creadas exitosamente');
+
+    // Índices para mejorar rendimiento
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_animales_estado ON animales(estado)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_animales_categoria ON animales(categoria)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_animales_sexo ON animales(sexo)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_animales_ubicacion ON animales(ubicacion_actual_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_pesajes_animal ON pesajes(animal_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_pesajes_fecha ON pesajes(fecha_pesaje)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_eventos_animal ON eventos_sanitarios(animal_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ingresos_fecha ON ingresos(fecha)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_vacunaciones_animal ON vacunaciones(animal_id)`);
+
+    console.log('✅ Índices creados exitosamente');
     console.log('📊 Insertando datos iniciales...');
 
     const bcrypt = require('bcryptjs');

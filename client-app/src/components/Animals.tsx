@@ -140,10 +140,7 @@ const Animals: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) {
-      console.log('Validación fallida:', errors);
-      return;
-    }
+    if (!validateForm()) return;
     
     setLoading(true);
     setErrors({});
@@ -159,12 +156,10 @@ const Animals: React.FC = () => {
       };
       
       if (modalType === 'create') {
-        const response = await api.post('/animals', submitData);
-        console.log('Animal creado:', response.data);
+        await api.post('/animals', submitData);
         setSuccess('Animal registrado exitosamente');
       } else if (modalType === 'edit' && selectedAnimal) {
-        const response = await api.put(`/animals/${selectedAnimal.id}`, submitData);
-        console.log('Animal actualizado:', response.data);
+        await api.put(`/animals/${selectedAnimal.id}`, submitData);
         setSuccess('Animal actualizado exitosamente');
       }
       

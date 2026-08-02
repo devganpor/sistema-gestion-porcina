@@ -31,72 +31,12 @@ const Dashboard: React.FC = () => {
 
   const loadDashboardData = async () => {
     try {
-      // Cargar datos reales de la API
-      const [animalsRes, weightsRes] = await Promise.all([
-        api.get('/animals'),
-        api.get('/weights/ready-for-sale?peso_minimo=80').catch(() => ({ data: [] }))
+      const [kpisRes, alertsRes] = await Promise.all([
+        api.get('/dashboard/kpis'),
+        api.get('/dashboard/alerts').catch(() => ({ data: [] }))
       ]);
-      
-      const animals = animalsRes.data || [];
-      const readyForSale = weightsRes.data || [];
-      
-      // Calcular KPIs reales
-      const totalAnimales = animals.length;
-      const cerdas = animals.filter((a: any) => a.sexo === 'hembra' && a.categoria === 'reproductor').length;
-      const lechones = animals.filter((a: any) => a.categoria === 'lechon').length;
-      
-      // Inventario por categoría
-      const inventario = animals.reduce((acc: any, animal: any) => {
-        const existing = acc.find((item: any) => item.categoria === animal.categoria);
-        if (existing) {
-          existing.cantidad++;
-        } else {
-          acc.push({ categoria: animal.categoria, cantidad: 1 });
-        }
-        return acc;
-      }, []);
-      
-      // Generar alertas dinámicas
-      const alertas = [];
-      if (readyForSale.length > 0) {
-        alertas.push({
-          tipo: 'venta',
-          titulo: 'Animales Listos para Venta',
-          mensaje: `${readyForSale.length} animales han alcanzado el peso objetivo`,
-          prioridad: 'alta'
-        });
-      }
-      
-      if (lechones > totalAnimales * 0.4) {
-        alertas.push({
-          tipo: 'destete',
-          titulo: 'Alto Número de Lechones',
-          mensaje: 'Considerar programar destetes próximamente',
-          prioridad: 'media'
-        });
-      }
-      
-      if (totalAnimales === 0) {
-        alertas.push({
-          tipo: 'inventario',
-          titulo: 'Sin Animales Registrados',
-          mensaje: 'Comienza registrando tus primeros animales',
-          prioridad: 'baja'
-        });
-      }
-      
-      setKpis({
-        total_animales: totalAnimales,
-        cerdas_reproductoras: cerdas,
-        partos_ultimo_mes: Math.floor(cerdas * 0.3), // Estimado
-        promedio_lechones_por_parto: 8.5,
-        proximos_partos: Math.floor(cerdas * 0.2),
-        mortalidad_ultimo_mes: Math.floor(totalAnimales * 0.02),
-        listos_para_venta: readyForSale.length,
-        inventario
-      });
-      
-      setAlerts(alertas);
+      setKpis(kpisRes.data);
+      setAlerts(alertsRes.data || []);
     } catch (error) {
       console.error('Error cargando dashboard:', error);
     } finally {
