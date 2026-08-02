@@ -26,6 +26,7 @@ const genealogyRoutes = require('./routes/genealogy');
 const nutritionRoutes = require('./routes/nutrition');
 const usersRoutes = require('./routes/users');
 const emailRoutes = require('./routes/email');
+const analyticsRoutes = require('./routes/analytics');
 const BackupService = require('./services/BackupService');
 const { AuditLogger, auditMiddleware } = require('./services/AuditLogger');
 const { errorHandler } = require('./middleware/errorHandler');
@@ -148,6 +149,7 @@ app.use('/api/genealogy', genealogyRoutes);
 app.use('/api/nutrition', nutritionRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/email', emailRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

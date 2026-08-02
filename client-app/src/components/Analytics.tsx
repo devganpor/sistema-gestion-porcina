@@ -1,85 +1,51 @@
 import React, { useState, useEffect } from 'react';
+import api from '../services/authService';
 
-interface AnalyticsData {
-  kpis: {
-    lechonesPerCerdaYear: number;
-    tasaParicion: number;
-    mortalidadPreDestete: number;
-    conversionAlimenticia: number;
-    gananciaDialia: number;
-    diasMercado: number;
-    costoKgProducido: number;
-    roi: number;
-  };
-  trends: {
-    month: string;
-    production: number;
-    costs: number;
-    revenue: number;
-  }[];
+interface KPIs {
+  mortalidad_pre_destete: number;
+  promedio_lechones: number;
+  ganancia_diaria: number;
+  dias_mercado: number;
+  costo_kg_producido: number;
+  roi: number;
+  total_ingresos: number;
+  total_gastos: number;
 }
 
+interface Trend {
+  mes: string;
+  ingresos: number;
+  gastos: number;
+  animales: number;
+}
+
+const formatCurrency = (v: number) =>
+  new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v);
+
+const kpiStatus = (value: number, target: number, reverse = false) => {
+  const pct = (value / target) * 100;
+  if (reverse) return pct <= 100 ? '#31ce36' : pct <= 120 ? '#ffad46' : '#f25961';
+  return pct >= 100 ? '#31ce36' : pct >= 80 ? '#ffad46' : '#f25961';
+};
+
 const Analytics: React.FC = () => {
-  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [kpis, setKpis] = useState<KPIs | null>(null);
+  const [trends, setTrends] = useState<Trend[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedPeriod, setSelectedPeriod] = useState('6months');
-  const [selectedMetric, setSelectedMetric] = useState('production');
+  const [period, setPeriod] = useState('6');
+  const [metric, setMetric] = useState<'ingresos' | 'gastos' | 'animales'>('ingresos');
 
   useEffect(() => {
-    loadAnalyticsData();
-  }, [selectedPeriod]);
-
-  const loadAnalyticsData = async () => {
     setLoading(true);
-    try {
-      // Simulación de datos de analytics
-      const mockData: AnalyticsData = {
-        kpis: {
-          lechonesPerCerdaYear: 26.5,
-          tasaParicion: 87.3,
-          mortalidadPreDestete: 4.2,
-          conversionAlimenticia: 2.8,
-          gananciaDialia: 520,
-          diasMercado: 165,
-          costoKgProducido: 4200,
-          roi: 23.5
-        },
-        trends: [
-          { month: 'Ene', production: 1200, costs: 850, revenue: 1100 },
-          { month: 'Feb', production: 1350, costs: 920, revenue: 1250 },
-          { month: 'Mar', production: 1180, costs: 880, revenue: 1180 },
-          { month: 'Abr', production: 1420, costs: 950, revenue: 1350 },
-          { month: 'May', production: 1380, costs: 940, revenue: 1320 },
-          { month: 'Jun', production: 1450, costs: 980, revenue: 1400 }
-        ]
-      };
-      
-      setTimeout(() => {
-        setData(mockData);
-        setLoading(false);
-      }, 800);
-    } catch (error) {
-      console.error('Error cargando analytics:', error);
-      setLoading(false);
-    }
-  };
-
-  const getKpiStatus = (value: number, target: number, isReverse = false) => {
-    const percentage = (value / target) * 100;
-    if (isReverse) {
-      return percentage <= 100 ? 'success' : percentage <= 120 ? 'warning' : 'danger';
-    }
-    return percentage >= 100 ? 'success' : percentage >= 80 ? 'warning' : 'danger';
-  };
-
-  const getKpiColor = (status: string) => {
-    switch (status) {
-      case 'success': return '#31ce36';
-      case 'warning': return '#ffad46';
-      case 'danger': return '#f25961';
-      default: return '#6c757d';
-    }
-  };
+    Promise.all([
+      api.get(`/analytics/kpis?months=${period}`),
+      api.get(`/analytics/trends?months=${period}`)
+    ]).then(([kpisRes, trendsRes]) => {
+      setKpis(kpisRes.data);
+      setTrends(trendsRes.data || []);
+    }).catch(console.error)
+      .finally(() => setLoading(false));
+  }, [period]);
 
   if (loading) {
     return (
@@ -94,263 +60,102 @@ const Analytics: React.FC = () => {
     );
   }
 
+  const maxTrend = Math.max(...trends.map(t => t[metric] || 0), 1);
+
   return (
     <div className="page-inner">
       <div className="card">
         <div className="card-header">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             <h4 className="card-title">
-              <i className="fas fa-brain" style={{ marginRight: '10px' }}></i>
-              Analytics e Inteligencia Artificial
+              <i className="fas fa-chart-bar" style={{ marginRight: '10px' }}></i>
+              Analytics
             </h4>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <select
-                value={selectedPeriod}
-                onChange={(e) => setSelectedPeriod(e.target.value)}
-                style={{
-                  padding: '8px 12px',
-                  border: '1px solid #ebedf2',
-                  borderRadius: '8px',
-                  fontSize: '14px'
-                }}
-              >
-                <option value="3months">Últimos 3 meses</option>
-                <option value="6months">Últimos 6 meses</option>
-                <option value="1year">Último año</option>
-                <option value="2years">Últimos 2 años</option>
-              </select>
-            </div>
+            <select
+              value={period}
+              onChange={e => setPeriod(e.target.value)}
+              style={{ padding: '8px 12px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px' }}
+            >
+              <option value="3">Últimos 3 meses</option>
+              <option value="6">Últimos 6 meses</option>
+              <option value="12">Último año</option>
+            </select>
           </div>
         </div>
 
         <div style={{ padding: '25px' }}>
-          {/* KPIs Principales */}
-          <div style={{ marginBottom: '30px' }}>
-            <h5 style={{ color: '#1a2035', marginBottom: '15px' }}>
-              <i className="fas fa-tachometer-alt" style={{ marginRight: '8px' }}></i>
-              Indicadores Clave de Rendimiento (KPIs)
-            </h5>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
-              <div className="card">
-                <div style={{ padding: '20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '2rem', fontWeight: '700', color: getKpiColor(getKpiStatus(data?.kpis.lechonesPerCerdaYear || 0, 25)), marginBottom: '8px' }}>
-                    {data?.kpis.lechonesPerCerdaYear}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#6c757d', fontWeight: '600', marginBottom: '5px' }}>LECHONES/CERDA/AÑO</div>
-                  <div style={{ fontSize: '11px', color: '#6c757d' }}>Meta: 25+ | Actual: Excelente</div>
-                </div>
-              </div>
 
-              <div className="card">
-                <div style={{ padding: '20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '2rem', fontWeight: '700', color: getKpiColor(getKpiStatus(data?.kpis.tasaParicion || 0, 85)), marginBottom: '8px' }}>
-                    {data?.kpis.tasaParicion}%
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#6c757d', fontWeight: '600', marginBottom: '5px' }}>TASA DE PARICIÓN</div>
-                  <div style={{ fontSize: '11px', color: '#6c757d' }}>Meta: 85%+ | Actual: Excelente</div>
+          {/* KPIs */}
+          <h5 style={{ color: '#1a2035', marginBottom: '15px' }}>
+            <i className="fas fa-tachometer-alt" style={{ marginRight: '8px' }}></i>
+            Indicadores Clave
+          </h5>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '30px' }}>
+            {[
+              { label: 'Mortalidad Pre-destete', value: `${kpis?.mortalidad_pre_destete ?? 0}%`, color: kpiStatus(kpis?.mortalidad_pre_destete ?? 0, 5, true), meta: 'Meta: <5%' },
+              { label: 'Lechones/Parto', value: kpis?.promedio_lechones ?? 0, color: kpiStatus(kpis?.promedio_lechones ?? 0, 10), meta: 'Meta: 10+' },
+              { label: 'Ganancia Diaria', value: `${kpis?.ganancia_diaria ?? 0}g`, color: kpiStatus(kpis?.ganancia_diaria ?? 0, 500), meta: 'Meta: 500g+' },
+              { label: 'Días a Mercado', value: kpis?.dias_mercado ?? 0, color: kpiStatus(kpis?.dias_mercado ?? 0, 170, true), meta: 'Meta: <170' },
+              { label: 'Costo/Kg Producido', value: formatCurrency(kpis?.costo_kg_producido ?? 0), color: '#1572e8', meta: '' },
+              { label: 'ROI del Período', value: `${kpis?.roi ?? 0}%`, color: kpiStatus(kpis?.roi ?? 0, 20), meta: 'Meta: 20%+' },
+              { label: 'Ingresos', value: formatCurrency(kpis?.total_ingresos ?? 0), color: '#31ce36', meta: '' },
+              { label: 'Gastos', value: formatCurrency(kpis?.total_gastos ?? 0), color: '#f25961', meta: '' },
+            ].map((kpi, i) => (
+              <div key={i} className="card">
+                <div style={{ padding: '18px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.6rem', fontWeight: '700', color: kpi.color, marginBottom: '6px' }}>{kpi.value}</div>
+                  <div style={{ fontSize: '12px', color: '#6c757d', fontWeight: '600', textTransform: 'uppercase' }}>{kpi.label}</div>
+                  {kpi.meta && <div style={{ fontSize: '11px', color: '#aaa', marginTop: '4px' }}>{kpi.meta}</div>}
                 </div>
               </div>
-
-              <div className="card">
-                <div style={{ padding: '20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '2rem', fontWeight: '700', color: getKpiColor(getKpiStatus(data?.kpis.mortalidadPreDestete || 0, 5, true)), marginBottom: '8px' }}>
-                    {data?.kpis.mortalidadPreDestete}%
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#6c757d', fontWeight: '600', marginBottom: '5px' }}>MORTALIDAD PRE-DESTETE</div>
-                  <div style={{ fontSize: '11px', color: '#6c757d' }}>Meta: &lt;5% | Actual: Excelente</div>
-                </div>
-              </div>
-
-              <div className="card">
-                <div style={{ padding: '20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '2rem', fontWeight: '700', color: getKpiColor(getKpiStatus(data?.kpis.conversionAlimenticia || 0, 3.0, true)), marginBottom: '8px' }}>
-                    {data?.kpis.conversionAlimenticia}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#6c757d', fontWeight: '600', marginBottom: '5px' }}>CONVERSIÓN ALIMENTICIA</div>
-                  <div style={{ fontSize: '11px', color: '#6c757d' }}>Meta: &lt;3.0 | Actual: Excelente</div>
-                </div>
-              </div>
-
-              <div className="card">
-                <div style={{ padding: '20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '2rem', fontWeight: '700', color: getKpiColor(getKpiStatus(data?.kpis.gananciaDialia || 0, 500)), marginBottom: '8px' }}>
-                    {data?.kpis.gananciaDialia}g
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#6c757d', fontWeight: '600', marginBottom: '5px' }}>GANANCIA DIARIA</div>
-                  <div style={{ fontSize: '11px', color: '#6c757d' }}>Meta: 500g+ | Actual: Excelente</div>
-                </div>
-              </div>
-
-              <div className="card">
-                <div style={{ padding: '20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '2rem', fontWeight: '700', color: getKpiColor(getKpiStatus(data?.kpis.diasMercado || 0, 170, true)), marginBottom: '8px' }}>
-                    {data?.kpis.diasMercado}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#6c757d', fontWeight: '600', marginBottom: '5px' }}>DÍAS A MERCADO</div>
-                  <div style={{ fontSize: '11px', color: '#6c757d' }}>Meta: &lt;170 | Actual: Excelente</div>
-                </div>
-              </div>
-
-              <div className="card">
-                <div style={{ padding: '20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '2rem', fontWeight: '700', color: getKpiColor(getKpiStatus(data?.kpis.costoKgProducido || 0, 4500, true)), marginBottom: '8px' }}>
-                    ${data?.kpis.costoKgProducido}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#6c757d', fontWeight: '600', marginBottom: '5px' }}>COSTO/KG PRODUCIDO</div>
-                  <div style={{ fontSize: '11px', color: '#6c757d' }}>Meta: &lt;$4500 | Actual: Excelente</div>
-                </div>
-              </div>
-
-              <div className="card">
-                <div style={{ padding: '20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '2rem', fontWeight: '700', color: getKpiColor(getKpiStatus(data?.kpis.roi || 0, 20)), marginBottom: '8px' }}>
-                    {data?.kpis.roi}%
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#6c757d', fontWeight: '600', marginBottom: '5px' }}>ROI</div>
-                  <div style={{ fontSize: '11px', color: '#6c757d' }}>Meta: 20%+ | Actual: Excelente</div>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
 
-          {/* Análisis de Tendencias */}
+          {/* Tendencias */}
           <div className="card" style={{ marginBottom: '25px' }}>
             <div className="card-header">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                 <h5 className="card-title">
                   <i className="fas fa-chart-line" style={{ marginRight: '8px' }}></i>
-                  Análisis de Tendencias
+                  Tendencias por Mes
                 </h5>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button
-                    onClick={() => setSelectedMetric('production')}
-                    className={`btn btn-sm ${selectedMetric === 'production' ? 'btn-primary' : 'btn-secondary'}`}
-                  >
-                    Producción
-                  </button>
-                  <button
-                    onClick={() => setSelectedMetric('costs')}
-                    className={`btn btn-sm ${selectedMetric === 'costs' ? 'btn-primary' : 'btn-secondary'}`}
-                  >
-                    Costos
-                  </button>
-                  <button
-                    onClick={() => setSelectedMetric('revenue')}
-                    className={`btn btn-sm ${selectedMetric === 'revenue' ? 'btn-primary' : 'btn-secondary'}`}
-                  >
-                    Ingresos
-                  </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {(['ingresos', 'gastos', 'animales'] as const).map(m => (
+                    <button key={m} onClick={() => setMetric(m)}
+                      className={`btn btn-sm ${metric === m ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ textTransform: 'capitalize' }}>
+                      {m}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
             <div style={{ padding: '20px' }}>
-              <div style={{ background: '#f8f9fa', padding: '40px', borderRadius: '8px', textAlign: 'center' }}>
-                <i className="fas fa-chart-area" style={{ fontSize: '48px', color: '#6c757d', marginBottom: '15px', opacity: 0.5 }}></i>
-                <h5 style={{ color: '#1a2035' }}>Gráfico de Tendencias</h5>
-                <p style={{ color: '#6c757d' }}>
-                  Aquí se mostraría el gráfico de tendencias para: <strong>{selectedMetric}</strong><br/>
-                  Período: {selectedPeriod}
-                </p>
-              </div>
+              {trends.length > 0 ? (
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', height: '180px' }}>
+                  {trends.map((t, i) => {
+                    const val = t[metric] || 0;
+                    const height = Math.max((val / maxTrend) * 150, 4);
+                    return (
+                      <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ fontSize: '10px', color: '#6c757d', textAlign: 'center' }}>
+                          {metric !== 'animales' ? formatCurrency(val) : val}
+                        </div>
+                        <div style={{ width: '100%', height: `${height}px`, background: metric === 'ingresos' ? '#31ce36' : metric === 'gastos' ? '#f25961' : '#1572e8', borderRadius: '4px 4px 0 0' }}></div>
+                        <div style={{ fontSize: '11px', color: '#6c757d', fontWeight: '600' }}>{t.mes}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
+                  <i className="fas fa-chart-bar" style={{ fontSize: '36px', marginBottom: '10px', display: 'block', opacity: 0.3 }}></i>
+                  Sin datos para el período seleccionado
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Predicciones IA */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
-            <div className="card">
-              <div className="card-header">
-                <h5 className="card-title">
-                  <i className="fas fa-robot" style={{ marginRight: '8px' }}></i>
-                  Predicciones IA
-                </h5>
-              </div>
-              <div style={{ padding: '20px' }}>
-                <div style={{ marginBottom: '15px', padding: '15px', background: '#e3f2fd', borderRadius: '8px', borderLeft: '4px solid #1572e8' }}>
-                  <div style={{ fontWeight: '600', color: '#1a2035', marginBottom: '5px' }}>
-                    <i className="fas fa-chart-line" style={{ marginRight: '8px', color: '#1572e8' }}></i>
-                    Producción Próximo Mes
-                  </div>
-                  <div style={{ fontSize: '14px', color: '#6c757d' }}>
-                    Se estima una producción de <strong>1,520 kg</strong> basado en tendencias actuales
-                  </div>
-                </div>
-
-                <div style={{ marginBottom: '15px', padding: '15px', background: '#f3e5f5', borderRadius: '8px', borderLeft: '4px solid #f25961' }}>
-                  <div style={{ fontWeight: '600', color: '#1a2035', marginBottom: '5px' }}>
-                    <i className="fas fa-exclamation-triangle" style={{ marginRight: '8px', color: '#f25961' }}></i>
-                    Alerta de Rendimiento
-                  </div>
-                  <div style={{ fontSize: '14px', color: '#6c757d' }}>
-                    Corral 5 muestra signos de bajo rendimiento. Revisar alimentación.
-                  </div>
-                </div>
-
-                <div style={{ padding: '15px', background: '#e8f5e8', borderRadius: '8px', borderLeft: '4px solid #31ce36' }}>
-                  <div style={{ fontWeight: '600', color: '#1a2035', marginBottom: '5px' }}>
-                    <i className="fas fa-lightbulb" style={{ marginRight: '8px', color: '#31ce36' }}></i>
-                    Recomendación
-                  </div>
-                  <div style={{ fontSize: '14px', color: '#6c757d' }}>
-                    Optimizar dieta en fase de engorde puede mejorar conversión en 0.2 puntos
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="card-header">
-                <h5 className="card-title">
-                  <i className="fas fa-bullseye" style={{ marginRight: '8px' }}></i>
-                  Objetivos vs Realidad
-                </h5>
-              </div>
-              <div style={{ padding: '20px' }}>
-                <div style={{ marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#1a2035' }}>Lechones/Cerda/Año</span>
-                    <span style={{ fontSize: '14px', color: '#31ce36', fontWeight: '600' }}>106%</span>
-                  </div>
-                  <div style={{ background: '#ebedf2', borderRadius: '10px', height: '8px' }}>
-                    <div style={{ background: '#31ce36', borderRadius: '10px', height: '8px', width: '106%', maxWidth: '100%' }}></div>
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '2px' }}>Meta: 25 | Actual: 26.5</div>
-                </div>
-
-                <div style={{ marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#1a2035' }}>Conversión Alimenticia</span>
-                    <span style={{ fontSize: '14px', color: '#31ce36', fontWeight: '600' }}>107%</span>
-                  </div>
-                  <div style={{ background: '#ebedf2', borderRadius: '10px', height: '8px' }}>
-                    <div style={{ background: '#31ce36', borderRadius: '10px', height: '8px', width: '93%' }}></div>
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '2px' }}>Meta: &lt;3.0 | Actual: 2.8</div>
-                </div>
-
-                <div style={{ marginBottom: '20px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#1a2035' }}>Mortalidad Pre-destete</span>
-                    <span style={{ fontSize: '14px', color: '#31ce36', fontWeight: '600' }}>84%</span>
-                  </div>
-                  <div style={{ background: '#ebedf2', borderRadius: '10px', height: '8px' }}>
-                    <div style={{ background: '#31ce36', borderRadius: '10px', height: '8px', width: '84%' }}></div>
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '2px' }}>Meta: &lt;5% | Actual: 4.2%</div>
-                </div>
-
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#1a2035' }}>ROI</span>
-                    <span style={{ fontSize: '14px', color: '#31ce36', fontWeight: '600' }}>118%</span>
-                  </div>
-                  <div style={{ background: '#ebedf2', borderRadius: '10px', height: '8px' }}>
-                    <div style={{ background: '#31ce36', borderRadius: '10px', height: '8px', width: '100%' }}></div>
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '2px' }}>Meta: 20% | Actual: 23.5%</div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
