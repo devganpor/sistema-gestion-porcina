@@ -53,15 +53,18 @@ router.post('/', authenticateToken, csrfProtection, [
 
   const {
     identificador_unico, nombre, sexo, raza_id, fecha_nacimiento,
-    peso_nacimiento, madre_id, padre_id, categoria, ubicacion_actual_id, observaciones
+    peso_nacimiento, madre_id, padre_id, categoria, ubicacion_actual_id,
+    observaciones, valor_compra, fecha_ingreso, origen
   } = req.body;
 
   const result = await query(
     `INSERT INTO animales (identificador_unico, nombre, sexo, raza_id, fecha_nacimiento,
-     peso_nacimiento, madre_id, padre_id, categoria, ubicacion_actual_id, observaciones)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+     peso_nacimiento, madre_id, padre_id, categoria, ubicacion_actual_id, observaciones,
+     valor_compra, fecha_ingreso, origen)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
     [identificador_unico, nombre, sexo, raza_id, fecha_nacimiento,
-     peso_nacimiento, madre_id, padre_id, categoria, ubicacion_actual_id, observaciones]
+     peso_nacimiento, madre_id, padre_id, categoria, ubicacion_actual_id, observaciones,
+     valor_compra || 0, fecha_ingreso || null, origen || 'nacimiento']
   );
 
   if (!result.rows || result.rows.length === 0) throw new AppError('Error creando el animal', 500);
@@ -90,7 +93,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const allowedFields = [
       'identificador_unico', 'nombre', 'sexo', 'raza_id', 'fecha_nacimiento',
       'peso_nacimiento', 'madre_id', 'padre_id', 'categoria', 'ubicacion_actual_id',
-      'observaciones', 'estado', 'fecha_salida', 'motivo_salida'
+      'observaciones', 'estado', 'fecha_salida', 'motivo_salida',
+      'valor_compra', 'fecha_ingreso', 'origen'
     ];
 
     const filteredUpdates = {};
@@ -230,6 +234,157 @@ router.post('/bulk', authenticateToken, asyncHandler(async (req, res) => {
   const errCount = results.filter(r => r.estado === 'error').length;
   res.json({ insertados: ok, errores: errCount, resultados: results });
 }));
+
+// GET /:id/trazabilidad — historial completo de costos del animal
+router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [animalRes, gastosRes, eventosRes, vacunasRes, movimientosRes, ingresosRes] = await Promise.all([
+      query(`
+        SELECT a.*, r.nombre as raza_nombre, u.nombre as ubicacion_nombre
+        FROM animales a
+        LEFT JOIN razas r ON a.raza_id = r.id
+        LEFT JOIN ubicaciones u ON a.ubicacion_actual_id = u.id
+        WHERE a.id = $1
+      `, [id]),
+      query(`
+        SELECT fecha, categoria, descripcion, monto
+        FROM gastos WHERE animal_id = $1 ORDER BY fecha
+      `, [id]),
+      query(`
+        SELECT fecha, tipo_evento, descripcion, costo, veterinario
+        FROM eventos_sanitarios WHERE animal_id = $1 AND costo > 0 ORDER BY fecha
+      `, [id]),
+      query(`
+        SELECT fecha_aplicacion as fecha, vacuna as descripcion
+        FROM vacunaciones WHERE animal_id = $1 ORDER BY fecha_aplicacion
+      `, [id]),
+      query(`
+        SELECT mu.fecha, mu.motivo, mu.costo_acumulado_momento, mu.peso_momento, mu.observaciones,
+               uo.nombre as origen_nombre, ud.nombre as destino_nombre
+        FROM movimientos_ubicacion mu
+        LEFT JOIN ubicaciones uo ON mu.ubicacion_origen_id = uo.id
+        LEFT JOIN ubicaciones ud ON mu.ubicacion_destino_id = ud.id
+        WHERE mu.animal_id = $1 ORDER BY mu.fecha
+      `, [id]),
+      query(`
+        SELECT fecha, tipo, descripcion, monto, peso_venta, precio_kg, comprador
+        FROM ingresos WHERE animal_id = $1 ORDER BY fecha
+      `, [id])
+    ]);
+
+    if (animalRes.rows.length === 0) return res.status(404).json({ error: 'Animal no encontrado' });
+
+    const animal = animalRes.rows[0];
+
+    // Construir linea de tiempo unificada
+    const timeline = [];
+
+    // Ingreso del animal
+    const fechaIngreso = animal.fecha_ingreso || animal.fecha_nacimiento || animal.created_at;
+    timeline.push({
+      fecha: fechaIngreso,
+      tipo: 'ingreso',
+      descripcion: animal.origen === 'compra' ? 'Compra del animal' : 'Nacimiento / Ingreso al sistema',
+      monto: parseFloat(animal.valor_compra || 0),
+      icono: 'fa-sign-in-alt',
+      color: '#1572e8'
+    });
+
+    gastosRes.rows.forEach(g => timeline.push({
+      fecha: g.fecha, tipo: 'gasto',
+      descripcion: `${g.categoria}${g.descripcion ? ' — ' + g.descripcion : ''}`,
+      monto: parseFloat(g.monto), icono: 'fa-dollar-sign', color: '#f25961'
+    }));
+
+    eventosRes.rows.forEach(e => timeline.push({
+      fecha: e.fecha, tipo: 'sanitario',
+      descripcion: `${e.tipo_evento}${e.descripcion ? ' — ' + e.descripcion : ''}${e.veterinario ? ' (Dr. ' + e.veterinario + ')' : ''}`,
+      monto: parseFloat(e.costo), icono: 'fa-syringe', color: '#ffad46'
+    }));
+
+    vacunasRes.rows.forEach(v => timeline.push({
+      fecha: v.fecha, tipo: 'vacuna',
+      descripcion: `Vacuna: ${v.descripcion}`,
+      monto: 0, icono: 'fa-shield-alt', color: '#31ce36'
+    }));
+
+    movimientosRes.rows.forEach(m => timeline.push({
+      fecha: m.fecha, tipo: 'movimiento',
+      descripcion: `Traslado: ${m.origen_nombre || '?'} → ${m.destino_nombre || '?'}${m.motivo ? ' (' + m.motivo + ')' : ''}`,
+      monto: 0, icono: 'fa-exchange-alt', color: '#6c757d',
+      costo_acumulado_momento: parseFloat(m.costo_acumulado_momento || 0),
+      peso_momento: m.peso_momento
+    }));
+
+    ingresosRes.rows.forEach(i => timeline.push({
+      fecha: i.fecha, tipo: 'ingreso_venta',
+      descripcion: `${i.tipo}${i.descripcion ? ' — ' + i.descripcion : ''}${i.comprador ? ' (Comprador: ' + i.comprador + ')' : ''}${i.peso_venta ? ' | ' + i.peso_venta + ' kg' : ''}`,
+      monto: parseFloat(i.monto), icono: 'fa-hand-holding-usd', color: '#31ce36'
+    }));
+
+    // Ordenar por fecha
+    timeline.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+
+    // Calcular totales
+    const costoTotal = parseFloat(animal.valor_compra || 0)
+      + gastosRes.rows.reduce((s, g) => s + parseFloat(g.monto), 0)
+      + eventosRes.rows.reduce((s, e) => s + parseFloat(e.costo), 0);
+
+    const ingresoTotal = ingresosRes.rows.reduce((s, i) => s + parseFloat(i.monto), 0);
+
+    const resumen = {
+      valor_compra: parseFloat(animal.valor_compra || 0),
+      gastos_directos: gastosRes.rows.reduce((s, g) => s + parseFloat(g.monto), 0),
+      costos_sanitarios: eventosRes.rows.reduce((s, e) => s + parseFloat(e.costo), 0),
+      costo_total: costoTotal,
+      ingreso_total: ingresoTotal,
+      resultado: ingresoTotal - costoTotal
+    };
+
+    res.json({ animal, timeline, resumen, movimientos: movimientosRes.rows });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error obteniendo trazabilidad' });
+  }
+});
+
+// POST /:id/movimiento — registrar traslado de ubicación
+router.post('/:id/movimiento', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { ubicacion_destino_id, fecha, motivo, peso_momento, observaciones } = req.body;
+    if (!ubicacion_destino_id || !fecha) return res.status(400).json({ error: 'ubicacion_destino_id y fecha son requeridos' });
+
+    const animalRes = await query('SELECT ubicacion_actual_id FROM animales WHERE id=$1', [id]);
+    if (animalRes.rows.length === 0) return res.status(404).json({ error: 'Animal no encontrado' });
+
+    const ubicacion_origen_id = animalRes.rows[0].ubicacion_actual_id;
+
+    // Calcular costo acumulado hasta este momento
+    const costoRes = await query(`
+      SELECT
+        COALESCE((SELECT valor_compra FROM animales WHERE id=$1), 0) +
+        COALESCE((SELECT SUM(monto) FROM gastos WHERE animal_id=$1), 0) +
+        COALESCE((SELECT SUM(costo) FROM eventos_sanitarios WHERE animal_id=$1 AND costo > 0), 0)
+      AS total
+    `, [id]);
+    const costo_acumulado = parseFloat(costoRes.rows[0].total || 0);
+
+    await query(`
+      INSERT INTO movimientos_ubicacion (animal_id, ubicacion_origen_id, ubicacion_destino_id, fecha, motivo, costo_acumulado_momento, peso_momento, usuario_id, observaciones)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+    `, [id, ubicacion_origen_id, ubicacion_destino_id, fecha, motivo, costo_acumulado, peso_momento, req.user.id, observaciones]);
+
+    await query('UPDATE animales SET ubicacion_actual_id=$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2', [ubicacion_destino_id, id]);
+
+    res.status(201).json({ message: 'Movimiento registrado exitosamente', costo_acumulado });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error registrando movimiento' });
+  }
+});
 
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {

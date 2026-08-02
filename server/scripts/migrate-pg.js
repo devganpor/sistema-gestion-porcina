@@ -524,6 +524,46 @@ async function createTables() {
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_plan_etapas_plan ON plan_etapas(plan_id)`);
 
+    // === TRAZABILIDAD DE ANIMALES ===
+    // Valor de compra en animales
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='animales' AND column_name='valor_compra')
+        THEN ALTER TABLE animales ADD COLUMN valor_compra DECIMAL(12,2) DEFAULT 0; END IF;
+      END $$;
+    `);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='animales' AND column_name='fecha_ingreso')
+        THEN ALTER TABLE animales ADD COLUMN fecha_ingreso DATE; END IF;
+      END $$;
+    `);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='animales' AND column_name='origen')
+        THEN ALTER TABLE animales ADD COLUMN origen VARCHAR(50) DEFAULT 'nacimiento'; END IF;
+      END $$;
+    `);
+
+    // Historial de movimientos de ubicación
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS movimientos_ubicacion (
+        id SERIAL PRIMARY KEY,
+        animal_id INTEGER REFERENCES animales(id) ON DELETE CASCADE,
+        ubicacion_origen_id INTEGER REFERENCES ubicaciones(id),
+        ubicacion_destino_id INTEGER REFERENCES ubicaciones(id),
+        fecha DATE NOT NULL,
+        motivo VARCHAR(255),
+        costo_acumulado_momento DECIMAL(12,2) DEFAULT 0,
+        peso_momento DECIMAL(6,2),
+        usuario_id INTEGER REFERENCES usuarios(id),
+        observaciones TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_movimientos_animal ON movimientos_ubicacion(animal_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_movimientos_fecha ON movimientos_ubicacion(fecha)`);
+
     console.log('✅ Datos iniciales insertados');
     console.log('🎉 Migración completada exitosamente');
 

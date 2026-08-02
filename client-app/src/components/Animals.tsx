@@ -16,7 +16,34 @@ interface Animal {
   ubicacion_actual_id?: number;
   fecha_nacimiento: string;
   peso_nacimiento?: number;
+  valor_compra?: number;
+  fecha_ingreso?: string;
+  origen?: string;
   observaciones?: string;
+}
+
+interface TraceEvent {
+  fecha: string;
+  tipo: string;
+  descripcion: string;
+  monto: number;
+  icono: string;
+  color: string;
+  costo_acumulado_momento?: number;
+  peso_momento?: number;
+}
+
+interface Trazabilidad {
+  animal: Animal;
+  timeline: TraceEvent[];
+  resumen: {
+    valor_compra: number;
+    gastos_directos: number;
+    costos_sanitarios: number;
+    costo_total: number;
+    ingreso_total: number;
+    resultado: number;
+  };
 }
 
 const Animals: React.FC = () => {
@@ -33,6 +60,14 @@ const Animals: React.FC = () => {
   const [filterSex, setFilterSex] = useState('');
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [success, setSuccess] = useState('');
+
+  // Trazabilidad
+  const [showTraceModal, setShowTraceModal] = useState(false);
+  const [traceData, setTraceData] = useState<Trazabilidad | null>(null);
+  const [traceLoading, setTraceLoading] = useState(false);
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [moveAnimal, setMoveAnimal] = useState<Animal | null>(null);
+  const [moveForm, setMoveForm] = useState({ ubicacion_destino_id: '', fecha: new Date().toISOString().split('T')[0], motivo: '', peso_momento: '', observaciones: '' });
 
   // Carga masiva
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -54,7 +89,10 @@ const Animals: React.FC = () => {
     raza_id: '',
     ubicacion_actual_id: '',
     padre_id: '',
-    madre_id: ''
+    madre_id: '',
+    valor_compra: '',
+    fecha_ingreso: '',
+    origen: 'nacimiento'
   });
 
   useEffect(() => {
@@ -167,7 +205,9 @@ const Animals: React.FC = () => {
         raza_id: formData.raza_id ? parseInt(formData.raza_id) : null,
         ubicacion_actual_id: formData.ubicacion_actual_id ? parseInt(formData.ubicacion_actual_id) : null,
         padre_id: formData.padre_id ? parseInt(formData.padre_id) : null,
-        madre_id: formData.madre_id ? parseInt(formData.madre_id) : null
+        madre_id: formData.madre_id ? parseInt(formData.madre_id) : null,
+        valor_compra: formData.valor_compra ? parseFloat(formData.valor_compra) : 0,
+        fecha_ingreso: formData.fecha_ingreso || null
       };
       
       if (modalType === 'create') {
@@ -207,7 +247,10 @@ const Animals: React.FC = () => {
       raza_id: '',
       ubicacion_actual_id: '',
       padre_id: '',
-      madre_id: ''
+      madre_id: '',
+      valor_compra: '',
+      fecha_ingreso: '',
+      origen: 'nacimiento'
     });
     setErrors({});
     setSelectedAnimal(null);
@@ -231,7 +274,10 @@ const Animals: React.FC = () => {
       raza_id: animal.raza_id?.toString() || '',
       ubicacion_actual_id: animal.ubicacion_actual_id?.toString() || '',
       padre_id: '',
-      madre_id: ''
+      madre_id: '',
+      valor_compra: animal.valor_compra?.toString() || '',
+      fecha_ingreso: animal.fecha_ingreso?.split('T')[0] || '',
+      origen: animal.origen || 'nacimiento'
     });
     setSelectedAnimal(animal);
     setModalType('edit');
@@ -242,6 +288,40 @@ const Animals: React.FC = () => {
     setSelectedAnimal(animal);
     setModalType('view');
     setShowModal(true);
+  };
+
+  const handleTrace = async (animal: Animal) => {
+    setTraceLoading(true);
+    setShowTraceModal(true);
+    setTraceData(null);
+    try {
+      const res = await api.get(`/animals/${animal.id}/trazabilidad`);
+      setTraceData(res.data);
+    } catch { setTraceData(null); }
+    finally { setTraceLoading(false); }
+  };
+
+  const handleOpenMove = (animal: Animal) => {
+    setMoveAnimal(animal);
+    setMoveForm({ ubicacion_destino_id: '', fecha: new Date().toISOString().split('T')[0], motivo: '', peso_momento: '', observaciones: '' });
+    setShowMoveModal(true);
+  };
+
+  const handleSubmitMove = async () => {
+    if (!moveAnimal || !moveForm.ubicacion_destino_id) return;
+    try {
+      await api.post(`/animals/${moveAnimal.id}/movimiento`, {
+        ...moveForm,
+        ubicacion_destino_id: parseInt(moveForm.ubicacion_destino_id),
+        peso_momento: moveForm.peso_momento ? parseFloat(moveForm.peso_momento) : null
+      });
+      setSuccess('Movimiento registrado exitosamente');
+      setShowMoveModal(false);
+      loadAnimals();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Error registrando movimiento');
+    }
   };
 
   const handleDelete = async (animal: Animal) => {
@@ -537,25 +617,29 @@ const Animals: React.FC = () => {
                     <td>{animal.ubicacion_nombre || '-'}</td>
                     <td>
                       <div className="action-buttons">
-                        <button 
-                          className="btn btn-primary btn-sm" 
-                          title="Ver detalles"
-                          onClick={() => handleView(animal)}
-                        >
+                        <button className="btn btn-primary btn-sm" title="Ver detalles" onClick={() => handleView(animal)}>
                           <i className="fas fa-eye"></i>
                         </button>
-                        <button 
-                          className="btn btn-warning btn-sm" 
-                          title="Editar"
-                          onClick={() => handleEdit(animal)}
-                        >
+                        <button className="btn btn-warning btn-sm" title="Editar" onClick={() => handleEdit(animal)}>
                           <i className="fas fa-edit"></i>
                         </button>
-                        <button 
-                          className="btn btn-danger btn-sm" 
-                          title="Eliminar"
-                          onClick={() => handleDelete(animal)}
+                        <button
+                          className="btn btn-sm"
+                          title="Trazabilidad y costos"
+                          style={{ background: '#6f42c1', color: 'white' }}
+                          onClick={() => handleTrace(animal)}
                         >
+                          <i className="fas fa-route"></i>
+                        </button>
+                        <button
+                          className="btn btn-sm"
+                          title="Mover de ubicación"
+                          style={{ background: '#17a2b8', color: 'white' }}
+                          onClick={() => handleOpenMove(animal)}
+                        >
+                          <i className="fas fa-exchange-alt"></i>
+                        </button>
+                        <button className="btn btn-danger btn-sm" title="Eliminar" onClick={() => handleDelete(animal)}>
                           <i className="fas fa-trash"></i>
                         </button>
                       </div>
@@ -797,6 +881,31 @@ const Animals: React.FC = () => {
                     placeholder="Notas adicionales sobre el animal..."
                     rows={3}
                   />
+
+                  {/* Campos de trazabilidad */}
+                  <div style={{ background: '#f0f4ff', border: '1px solid #c7d7f8', borderRadius: '8px', padding: '16px', marginBottom: '15px' }}>
+                    <div style={{ fontWeight: '700', color: '#1a2035', marginBottom: '12px', fontSize: '13px' }}>
+                      <i className="fas fa-route" style={{ marginRight: '8px', color: '#6f42c1' }}></i>
+                      Datos de Trazabilidad y Costeo
+                    </div>
+                    <div className="grid grid-2">
+                      <div>
+                        <label style={{ fontWeight: '600', display: 'block', marginBottom: '6px', fontSize: '13px' }}>Origen del animal</label>
+                        <select className="form-control" value={formData.origen} onChange={e => setFormData({ ...formData, origen: e.target.value })}>
+                          <option value="nacimiento">Nacimiento en granja</option>
+                          <option value="compra">Compra externa</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontWeight: '600', display: 'block', marginBottom: '6px', fontSize: '13px' }}>Valor de compra / ingreso ($)</label>
+                        <input type="number" step="0.01" className="form-control" placeholder="0.00" value={formData.valor_compra} onChange={e => setFormData({ ...formData, valor_compra: e.target.value })} />
+                      </div>
+                    </div>
+                    <div style={{ marginTop: '12px' }}>
+                      <label style={{ fontWeight: '600', display: 'block', marginBottom: '6px', fontSize: '13px' }}>Fecha de ingreso a la granja</label>
+                      <input type="date" className="form-control" value={formData.fecha_ingreso} onChange={e => setFormData({ ...formData, fecha_ingreso: e.target.value })} />
+                    </div>
+                  </div>
                   
                   <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '25px' }}>
                     <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
@@ -813,6 +922,160 @@ const Animals: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Modal Trazabilidad */}
+      {showTraceModal && (
+        <div className="modal-overlay" onClick={() => setShowTraceModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="card-header" style={{ background: 'linear-gradient(135deg, #6f42c1 0%, #4a148c 100%)', color: 'white' }}>
+              <h5 className="card-title" style={{ color: 'white', margin: 0 }}>
+                <i className="fas fa-route" style={{ marginRight: '10px' }}></i>
+                Trazabilidad del Animal
+              </h5>
+              <button onClick={() => setShowTraceModal(false)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'white' }}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div style={{ padding: '25px' }}>
+              {traceLoading && (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <i className="fas fa-spinner fa-spin" style={{ fontSize: '32px', color: '#6f42c1' }}></i>
+                  <p style={{ marginTop: '10px', color: '#6c757d' }}>Cargando trazabilidad...</p>
+                </div>
+              )}
+              {!traceLoading && traceData && (() => {
+                const { animal, timeline, resumen } = traceData;
+                const fmt = (n: number) => `$${n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+                return (
+                  <div>
+                    {/* Info animal */}
+                    <div style={{ background: '#f8f9fa', borderRadius: '8px', padding: '16px', marginBottom: '20px', display: 'flex', gap: '30px', flexWrap: 'wrap' }}>
+                      <div><strong style={{ color: '#6c757d', fontSize: '12px' }}>ANIMAL</strong><div style={{ fontWeight: '700', fontSize: '18px' }}>{animal.identificador_unico}{animal.nombre ? ` — ${animal.nombre}` : ''}</div></div>
+                      <div><strong style={{ color: '#6c757d', fontSize: '12px' }}>CATEGORÍA</strong><div style={{ textTransform: 'capitalize' }}>{animal.categoria}</div></div>
+                      <div><strong style={{ color: '#6c757d', fontSize: '12px' }}>ESTADO</strong><div><span style={{ padding: '3px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: '600', background: animal.estado === 'activo' ? '#31ce36' : animal.estado === 'vendido' ? '#ffad46' : '#f25961', color: 'white', textTransform: 'capitalize' }}>{animal.estado}</span></div></div>
+                      <div><strong style={{ color: '#6c757d', fontSize: '12px' }}>UBICACIÓN ACTUAL</strong><div>{animal.ubicacion_nombre || '—'}</div></div>
+                      <div><strong style={{ color: '#6c757d', fontSize: '12px' }}>RAZA</strong><div>{animal.raza_nombre || '—'}</div></div>
+                    </div>
+
+                    {/* Resumen financiero */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+                      {[
+                        { label: 'Valor Compra/Ingreso', value: resumen.valor_compra, color: '#1572e8' },
+                        { label: 'Gastos Directos', value: resumen.gastos_directos, color: '#f25961' },
+                        { label: 'Costos Sanitarios', value: resumen.costos_sanitarios, color: '#ffad46' },
+                        { label: 'COSTO TOTAL', value: resumen.costo_total, color: '#1a2035', bold: true },
+                        { label: 'Ingresos por Venta', value: resumen.ingreso_total, color: '#31ce36' },
+                        { label: resumen.resultado >= 0 ? 'GANANCIA' : 'PÉRDIDA', value: Math.abs(resumen.resultado), color: resumen.resultado >= 0 ? '#31ce36' : '#f25961', bold: true }
+                      ].map((item, i) => (
+                        <div key={i} style={{ background: 'white', border: `2px solid ${item.color}20`, borderRadius: '8px', padding: '14px', textAlign: 'center' }}>
+                          <div style={{ fontSize: '11px', color: '#6c757d', fontWeight: '600', marginBottom: '4px' }}>{item.label}</div>
+                          <div style={{ fontSize: item.bold ? '18px' : '16px', fontWeight: '700', color: item.color }}>{fmt(item.value)}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Línea de tiempo */}
+                    <h6 style={{ color: '#1a2035', marginBottom: '16px', fontWeight: '700' }}>
+                      <i className="fas fa-history" style={{ marginRight: '8px', color: '#6f42c1' }}></i>
+                      Línea de Vida del Animal
+                    </h6>
+                    {timeline.length === 0 ? (
+                      <div style={{ textAlign: 'center', color: '#6c757d', padding: '20px' }}>Sin eventos registrados</div>
+                    ) : (
+                      <div style={{ position: 'relative', paddingLeft: '30px' }}>
+                        <div style={{ position: 'absolute', left: '14px', top: 0, bottom: 0, width: '2px', background: '#dee2e6' }}></div>
+                        {timeline.map((ev, i) => (
+                          <div key={i} style={{ position: 'relative', marginBottom: '16px', display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+                            <div style={{ position: 'absolute', left: '-22px', width: '28px', height: '28px', borderRadius: '50%', background: ev.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, zIndex: 1 }}>
+                              <i className={`fas ${ev.icono}`} style={{ color: 'white', fontSize: '11px' }}></i>
+                            </div>
+                            <div style={{ background: '#f8f9fa', borderRadius: '8px', padding: '10px 14px', flex: 1, borderLeft: `3px solid ${ev.color}` }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '4px' }}>
+                                <div>
+                                  <span style={{ fontSize: '11px', color: '#6c757d', fontWeight: '600' }}>{new Date(ev.fecha).toLocaleDateString('es-CO')}</span>
+                                  <div style={{ fontWeight: '600', color: '#1a2035', marginTop: '2px' }}>{ev.descripcion}</div>
+                                  {ev.tipo === 'movimiento' && ev.costo_acumulado_momento !== undefined && (
+                                    <div style={{ fontSize: '11px', color: '#6c757d', marginTop: '2px' }}>
+                                      Costo acumulado al momento: <strong>{fmt(ev.costo_acumulado_momento)}</strong>
+                                      {ev.peso_momento ? ` | Peso: ${ev.peso_momento} kg` : ''}
+                                    </div>
+                                  )}
+                                </div>
+                                {ev.monto > 0 && (
+                                  <span style={{ fontWeight: '700', color: ev.tipo === 'ingreso_venta' ? '#31ce36' : '#f25961', fontSize: '14px', whiteSpace: 'nowrap' }}>
+                                    {ev.tipo === 'ingreso_venta' ? '+' : '-'}{fmt(ev.monto)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Mover Animal */}
+      {showMoveModal && moveAnimal && (
+        <div className="modal-overlay" onClick={() => setShowMoveModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+            <div className="card-header" style={{ background: 'linear-gradient(135deg, #17a2b8 0%, #0d6e7e 100%)', color: 'white' }}>
+              <h5 className="card-title" style={{ color: 'white', margin: 0 }}>
+                <i className="fas fa-exchange-alt" style={{ marginRight: '10px' }}></i>
+                Mover Animal — {moveAnimal.identificador_unico}
+              </h5>
+              <button onClick={() => setShowMoveModal(false)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'white' }}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div style={{ padding: '25px' }}>
+              <div style={{ background: '#e8f4f8', borderRadius: '8px', padding: '12px', marginBottom: '20px', fontSize: '13px', color: '#0d6e7e' }}>
+                <i className="fas fa-info-circle" style={{ marginRight: '6px' }}></i>
+                Ubicación actual: <strong>{moveAnimal.ubicacion_nombre || 'Sin asignar'}</strong>. Se registrará el costo acumulado hasta este momento.
+              </div>
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ fontWeight: '600', display: 'block', marginBottom: '6px' }}>Nueva Ubicación *</label>
+                <select className="form-control" value={moveForm.ubicacion_destino_id} onChange={e => setMoveForm({ ...moveForm, ubicacion_destino_id: e.target.value })}>
+                  <option value="">Seleccionar ubicación...</option>
+                  {ubicaciones.filter(u => u.id !== moveAnimal.ubicacion_actual_id).map(u => (
+                    <option key={u.id} value={u.id}>{u.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '15px' }}>
+                <div>
+                  <label style={{ fontWeight: '600', display: 'block', marginBottom: '6px' }}>Fecha *</label>
+                  <input type="date" className="form-control" value={moveForm.fecha} onChange={e => setMoveForm({ ...moveForm, fecha: e.target.value })} />
+                </div>
+                <div>
+                  <label style={{ fontWeight: '600', display: 'block', marginBottom: '6px' }}>Peso actual (kg)</label>
+                  <input type="number" step="0.1" className="form-control" placeholder="Ej: 45.5" value={moveForm.peso_momento} onChange={e => setMoveForm({ ...moveForm, peso_momento: e.target.value })} />
+                </div>
+              </div>
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ fontWeight: '600', display: 'block', marginBottom: '6px' }}>Motivo del traslado</label>
+                <input type="text" className="form-control" placeholder="Ej: Cambio de etapa, engorde, maternidad..." value={moveForm.motivo} onChange={e => setMoveForm({ ...moveForm, motivo: e.target.value })} />
+              </div>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ fontWeight: '600', display: 'block', marginBottom: '6px' }}>Observaciones</label>
+                <textarea className="form-control" rows={2} placeholder="Notas adicionales..." value={moveForm.observaciones} onChange={e => setMoveForm({ ...moveForm, observaciones: e.target.value })} />
+              </div>
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => setShowMoveModal(false)}>Cancelar</button>
+                <button className="btn btn-primary" onClick={handleSubmitMove} disabled={!moveForm.ubicacion_destino_id}>
+                  <i className="fas fa-exchange-alt" style={{ marginRight: '8px' }}></i>
+                  Registrar Traslado
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Carga Masiva */}
       {showBulkModal && (
         <div className="modal-overlay" onClick={resetBulk}>
