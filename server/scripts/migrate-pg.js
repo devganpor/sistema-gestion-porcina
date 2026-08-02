@@ -242,9 +242,35 @@ async function createTables() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_pesajes_animal ON pesajes(animal_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_pesajes_fecha ON pesajes(fecha_pesaje)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_eventos_animal ON eventos_sanitarios(animal_id)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_gastos_fecha ON gastos(fecha)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_ingresos_fecha ON ingresos(fecha)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_vacunaciones_animal ON vacunaciones(animal_id)`);
+
+    // Índices en gastos e ingresos usando la columna correcta según lo que exista
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gastos' AND column_name='fecha') THEN
+          IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='idx_gastos_fecha') THEN
+            CREATE INDEX idx_gastos_fecha ON gastos(fecha);
+          END IF;
+        ELSIF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gastos' AND column_name='fecha_gasto') THEN
+          IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='idx_gastos_fecha') THEN
+            CREATE INDEX idx_gastos_fecha ON gastos(fecha_gasto);
+          END IF;
+        END IF;
+      END $$;
+    `);
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ingresos' AND column_name='fecha') THEN
+          IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='idx_ingresos_fecha') THEN
+            CREATE INDEX idx_ingresos_fecha ON ingresos(fecha);
+          END IF;
+        ELSIF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ingresos' AND column_name='fecha_ingreso') THEN
+          IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='idx_ingresos_fecha') THEN
+            CREATE INDEX idx_ingresos_fecha ON ingresos(fecha_ingreso);
+          END IF;
+        END IF;
+      END $$;
+    `);
     console.log('✅ Índices creados exitosamente');
     console.log('📊 Insertando datos iniciales...');
 
