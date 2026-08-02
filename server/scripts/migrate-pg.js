@@ -6,7 +6,6 @@ async function createTables() {
   try {
     console.log('🔧 Creando tablas en PostgreSQL...');
 
-    // Usuarios
     await client.query(`
       CREATE TABLE IF NOT EXISTS usuarios (
         id SERIAL PRIMARY KEY,
@@ -20,7 +19,6 @@ async function createTables() {
       )
     `);
 
-    // Razas
     await client.query(`
       CREATE TABLE IF NOT EXISTS razas (
         id SERIAL PRIMARY KEY,
@@ -30,20 +28,18 @@ async function createTables() {
       )
     `);
 
-    // Ubicaciones
     await client.query(`
       CREATE TABLE IF NOT EXISTS ubicaciones (
         id SERIAL PRIMARY KEY,
         nombre VARCHAR(100) NOT NULL,
         tipo VARCHAR(50),
-        capacidad INTEGER,
+        capacidad_maxima INTEGER,
         descripcion TEXT,
         activa BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    // Animales
     await client.query(`
       CREATE TABLE IF NOT EXISTS animales (
         id SERIAL PRIMARY KEY,
@@ -56,15 +52,16 @@ async function createTables() {
         madre_id INTEGER REFERENCES animales(id),
         categoria VARCHAR(50),
         estado VARCHAR(50) DEFAULT 'activo',
-        ubicacion_id INTEGER REFERENCES ubicaciones(id),
+        ubicacion_actual_id INTEGER REFERENCES ubicaciones(id),
         peso_nacimiento DECIMAL(5,2),
+        fecha_salida DATE,
+        motivo_salida VARCHAR(255),
         observaciones TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    // Pesajes
     await client.query(`
       CREATE TABLE IF NOT EXISTS pesajes (
         id SERIAL PRIMARY KEY,
@@ -78,7 +75,6 @@ async function createTables() {
       )
     `);
 
-    // Ciclos reproductivos
     await client.query(`
       CREATE TABLE IF NOT EXISTS ciclos_reproductivos (
         id SERIAL PRIMARY KEY,
@@ -98,16 +94,27 @@ async function createTables() {
       )
     `);
 
-    // Eventos sanitarios
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS medicamentos (
+        id SERIAL PRIMARY KEY,
+        nombre VARCHAR(100) NOT NULL,
+        tipo VARCHAR(50),
+        dias_retiro INTEGER DEFAULT 0,
+        dosis_recomendada VARCHAR(100),
+        stock_actual INTEGER DEFAULT 0,
+        fecha_vencimiento DATE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS eventos_sanitarios (
         id SERIAL PRIMARY KEY,
         animal_id INTEGER REFERENCES animales(id),
         tipo_evento VARCHAR(100) NOT NULL,
-        fecha_evento DATE NOT NULL,
+        fecha DATE NOT NULL,
         descripcion TEXT,
-        medicamento VARCHAR(100),
-        dosis VARCHAR(50),
+        tratamiento TEXT,
         veterinario VARCHAR(100),
         costo DECIMAL(10,2),
         observaciones TEXT,
@@ -115,48 +122,77 @@ async function createTables() {
       )
     `);
 
-    // Gastos
     await client.query(`
-      CREATE TABLE IF NOT EXISTS gastos (
+      CREATE TABLE IF NOT EXISTS vacunaciones (
         id SERIAL PRIMARY KEY,
-        concepto VARCHAR(255) NOT NULL,
-        categoria VARCHAR(100),
-        monto DECIMAL(10,2) NOT NULL,
-        fecha_gasto DATE NOT NULL,
-        descripcion TEXT,
+        animal_id INTEGER REFERENCES animales(id),
+        vacuna VARCHAR(100) NOT NULL,
+        fecha_aplicacion DATE NOT NULL,
+        lote VARCHAR(50),
+        proxima_dosis DATE,
+        responsable VARCHAR(100),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    // Ingresos
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tratamientos (
+        id SERIAL PRIMARY KEY,
+        evento_sanitario_id INTEGER REFERENCES eventos_sanitarios(id),
+        medicamento_id INTEGER REFERENCES medicamentos(id),
+        fecha_inicio DATE,
+        fecha_fin DATE,
+        dosis VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS gastos (
+        id SERIAL PRIMARY KEY,
+        fecha DATE NOT NULL,
+        categoria VARCHAR(100) NOT NULL,
+        subcategoria VARCHAR(100),
+        descripcion TEXT NOT NULL,
+        monto DECIMAL(10,2) NOT NULL,
+        proveedor VARCHAR(100),
+        factura VARCHAR(100),
+        animal_id INTEGER REFERENCES animales(id),
+        ubicacion_id INTEGER REFERENCES ubicaciones(id),
+        usuario_id INTEGER REFERENCES usuarios(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS ingresos (
         id SERIAL PRIMARY KEY,
-        concepto VARCHAR(255) NOT NULL,
-        categoria VARCHAR(100),
+        fecha DATE NOT NULL,
+        tipo VARCHAR(100) NOT NULL,
+        descripcion TEXT NOT NULL,
         monto DECIMAL(10,2) NOT NULL,
-        fecha_ingreso DATE NOT NULL,
-        descripcion TEXT,
+        comprador VARCHAR(100),
+        factura VARCHAR(100),
+        animal_id INTEGER REFERENCES animales(id),
+        peso_venta DECIMAL(6,2),
+        precio_kg DECIMAL(8,2),
+        usuario_id INTEGER REFERENCES usuarios(id),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
     console.log('✅ Tablas creadas exitosamente');
-
-    // Insertar datos iniciales
     console.log('📊 Insertando datos iniciales...');
 
-    // Usuario admin
     const bcrypt = require('bcryptjs');
-    const adminPassword = await bcrypt.hash('admin123', 10);
-    
-    await client.query(`
-      INSERT INTO usuarios (email, password_hash, nombre, rol) 
-      VALUES ($1, $2, $3, $4) 
-      ON CONFLICT (email) DO NOTHING
-    `, ['admin@granja.com', adminPassword, 'Administrador', 'admin']);
+    const adminPassword = await bcrypt.hash('Admin2025!', 12);
 
-    // Razas
+    await client.query(`
+      INSERT INTO usuarios (email, password_hash, nombre, rol)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (email) DO NOTHING
+    `, ['admin@granja.com', adminPassword, 'Administrador', 'administrador']);
+
     const razas = [
       ['Yorkshire', 'Raza prolífica y maternal'],
       ['Landrace', 'Excelente para producción de carne'],
@@ -167,13 +203,12 @@ async function createTables() {
 
     for (const [nombre, descripcion] of razas) {
       await client.query(`
-        INSERT INTO razas (nombre, descripcion) 
-        VALUES ($1, $2) 
+        INSERT INTO razas (nombre, descripcion)
+        VALUES ($1, $2)
         ON CONFLICT DO NOTHING
       `, [nombre, descripcion]);
     }
 
-    // Ubicaciones
     const ubicaciones = [
       ['Corral 1', 'corral', 20, 'Corral principal para reproductores'],
       ['Corral 2', 'corral', 15, 'Corral secundario'],
@@ -185,8 +220,8 @@ async function createTables() {
 
     for (const [nombre, tipo, capacidad, descripcion] of ubicaciones) {
       await client.query(`
-        INSERT INTO ubicaciones (nombre, tipo, capacidad, descripcion) 
-        VALUES ($1, $2, $3, $4) 
+        INSERT INTO ubicaciones (nombre, tipo, capacidad_maxima, descripcion)
+        VALUES ($1, $2, $3, $4)
         ON CONFLICT DO NOTHING
       `, [nombre, tipo, capacidad, descripcion]);
     }
@@ -202,7 +237,6 @@ async function createTables() {
   }
 }
 
-// Ejecutar si se llama directamente
 if (require.main === module) {
   createTables()
     .then(() => {
