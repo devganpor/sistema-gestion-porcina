@@ -1,0 +1,77 @@
+/* Fix para texto montado en formularios */
+.form-group {
+  margin-bottom: 20px;
+  clear: both;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #1a2035;
+  font-size: 14px;
+  clear: both;
+}
+
+.form-control {
+  display: block !important;
+  width: 100% !important;
+  padding: 12px 16px !important;
+  border: 1px solid #ebedf2 !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  background-color: #ffffff !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  vertical-align: top !important;
+}
+
+.form-control:focus {
+  outline: none !important;
+  border-color: #1572e8 !important;
+  box-shadow: 0 0 0 3px rgba(21, 114, 232, 0.1) !important;
+}
+
+/* Grid fixes */
+.grid {
+  display: grid;
+  gap: 20px;
+  width: 100%;
+}
+
+.grid-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 768px) {
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Modal fixes */
+.modal-content {
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* Input específicos */
+input.form-control,
+select.form-control,
+textarea.form-control {
+  display: block !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Fix para iconos */
+.form-group > div {
+  position: relative;
+  width: 100%;
+}
+
+.form-group i {
+  pointer-events: none;
+}
