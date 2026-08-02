@@ -287,6 +287,20 @@ async function createTables() {
         THEN ALTER TABLE pesajes ADD COLUMN usuario_id INTEGER REFERENCES usuarios(id); END IF;
       END $$;
     `);
+    // ingresos: add missing columns
+    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ingresos' AND column_name='animal_id') THEN ALTER TABLE ingresos ADD COLUMN animal_id INTEGER REFERENCES animales(id); END IF; END $$;`);
+    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ingresos' AND column_name='peso_venta') THEN ALTER TABLE ingresos ADD COLUMN peso_venta DECIMAL(6,2); END IF; END $$;`);
+    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ingresos' AND column_name='precio_kg') THEN ALTER TABLE ingresos ADD COLUMN precio_kg DECIMAL(8,2); END IF; END $$;`);
+    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ingresos' AND column_name='comprador') THEN ALTER TABLE ingresos ADD COLUMN comprador VARCHAR(100); END IF; END $$;`);
+    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ingresos' AND column_name='factura') THEN ALTER TABLE ingresos ADD COLUMN factura VARCHAR(100); END IF; END $$;`);
+    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ingresos' AND column_name='usuario_id') THEN ALTER TABLE ingresos ADD COLUMN usuario_id INTEGER REFERENCES usuarios(id); END IF; END $$;`);
+    // gastos: add missing columns
+    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gastos' AND column_name='animal_id') THEN ALTER TABLE gastos ADD COLUMN animal_id INTEGER REFERENCES animales(id); END IF; END $$;`);
+    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gastos' AND column_name='ubicacion_id') THEN ALTER TABLE gastos ADD COLUMN ubicacion_id INTEGER REFERENCES ubicaciones(id); END IF; END $$;`);
+    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gastos' AND column_name='subcategoria') THEN ALTER TABLE gastos ADD COLUMN subcategoria VARCHAR(100); END IF; END $$;`);
+    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gastos' AND column_name='proveedor') THEN ALTER TABLE gastos ADD COLUMN proveedor VARCHAR(100); END IF; END $$;`);
+    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gastos' AND column_name='factura') THEN ALTER TABLE gastos ADD COLUMN factura VARCHAR(100); END IF; END $$;`);
+    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gastos' AND column_name='usuario_id') THEN ALTER TABLE gastos ADD COLUMN usuario_id INTEGER REFERENCES usuarios(id); END IF; END $$;`);
     console.log('✅ Migraciones de columnas completadas');
 
     // === ÍNDICES ===

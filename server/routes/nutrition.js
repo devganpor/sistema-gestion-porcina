@@ -256,7 +256,7 @@ router.get('/plans', authenticateToken, async (req, res) => {
     const result = await query(`
       SELECT p.*, u.nombre as usuario_nombre,
         COUNT(e.id) as total_etapas,
-        COALESCE(SUM(e.dias_fin - e.dias_inicio + 1), 0) as total_dias
+        COALESCE(SUM(e.fecha_fin::date - e.fecha_inicio::date + 1), 0) as total_dias
       FROM planes_alimentacion p
       LEFT JOIN usuarios u ON p.usuario_id = u.id
       LEFT JOIN plan_etapas e ON p.id = e.plan_id
