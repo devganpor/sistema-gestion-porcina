@@ -32,6 +32,7 @@ const Health: React.FC = () => {
   const [activeTab, setActiveTab] = useState('eventos');
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState('evento');
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [success, setSuccess] = useState('');
   
@@ -162,10 +163,15 @@ const Health: React.FC = () => {
         endpoint = '/health/vaccinations';
       }
       
-      const response = await api.post(endpoint, submitData);
+      let response;
+      if (editingId && formType === 'evento') {
+        response = await api.put(`/health/events/${editingId}`, submitData);
+      } else {
+        response = await api.post(endpoint, submitData);
+      }
       console.log('Evento sanitario guardado:', response.data);
       
-      setSuccess(`${formType === 'evento' ? 'Evento sanitario' : 'Vacunación'} registrado exitosamente`);
+      setSuccess(`${formType === 'evento' ? 'Evento sanitario' : 'Vacunación'} ${editingId ? 'actualizado' : 'registrado'} exitosamente`);
       resetForm();
       await loadHealthData();
       
@@ -182,8 +188,35 @@ const Health: React.FC = () => {
     }
   };
 
+  const handleEditEvent = (event: HealthEvent) => {
+    setFormData({
+      animal_id: event.animal_id.toString(),
+      tipo_evento: event.tipo_evento,
+      fecha: event.fecha?.split('T')[0] || '',
+      descripcion: event.descripcion || '',
+      tratamiento: event.tratamiento || '',
+      veterinario: event.veterinario || '',
+      costo: event.costo?.toString() || '',
+      vacuna: '', lote: '', proxima_dosis: '', responsable: ''
+    });
+    setEditingId(event.id);
+    setFormType('evento');
+    setShowForm(true);
+  };
+
+  const handleDeleteEvent = async (id: number) => {
+    if (!window.confirm('¿Eliminar este evento sanitario?')) return;
+    try {
+      await api.delete(`/health/events/${id}`);
+      setSuccess('Evento eliminado');
+      loadHealthData();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch { alert('Error eliminando evento'); }
+  };
+
   const resetForm = () => {
     setShowForm(false);
+    setEditingId(null);
     setFormData({
       animal_id: '',
       tipo_evento: 'vacunacion',
@@ -615,11 +648,11 @@ const Health: React.FC = () => {
                         <td>{event.costo ? `$${event.costo.toLocaleString()}` : '-'}</td>
                         <td>
                           <div style={{ display: 'flex', gap: '5px' }}>
-                            <button className="btn btn-primary btn-sm" title="Ver">
-                              <i className="fas fa-eye"></i>
-                            </button>
-                            <button className="btn btn-warning btn-sm" title="Editar">
+                            <button className="btn btn-warning btn-sm" title="Editar" onClick={() => handleEditEvent(event)}>
                               <i className="fas fa-edit"></i>
+                            </button>
+                            <button className="btn btn-danger btn-sm" title="Eliminar" onClick={() => handleDeleteEvent(event.id)}>
+                              <i className="fas fa-trash"></i>
                             </button>
                           </div>
                         </td>

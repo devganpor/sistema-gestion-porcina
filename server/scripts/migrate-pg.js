@@ -240,6 +240,53 @@ async function createTables() {
         THEN ALTER TABLE animales ADD COLUMN motivo_salida VARCHAR(255); END IF;
       END $$;
     `);
+    // gastos: fecha_gasto -> fecha
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gastos' AND column_name='fecha_gasto')
+        AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gastos' AND column_name='fecha')
+        THEN ALTER TABLE gastos RENAME COLUMN fecha_gasto TO fecha; END IF;
+      END $$;
+    `);
+    // gastos: categoria_gasto -> categoria
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gastos' AND column_name='categoria_gasto')
+        AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='gastos' AND column_name='categoria')
+        THEN ALTER TABLE gastos RENAME COLUMN categoria_gasto TO categoria; END IF;
+      END $$;
+    `);
+    // ingresos: fecha_ingreso -> fecha
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ingresos' AND column_name='fecha_ingreso')
+        AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ingresos' AND column_name='fecha')
+        THEN ALTER TABLE ingresos RENAME COLUMN fecha_ingreso TO fecha; END IF;
+      END $$;
+    `);
+    // ingresos: tipo_ingreso -> tipo
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ingresos' AND column_name='tipo_ingreso')
+        AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ingresos' AND column_name='tipo')
+        THEN ALTER TABLE ingresos RENAME COLUMN tipo_ingreso TO tipo; END IF;
+      END $$;
+    `);
+    // pesajes: fecha -> fecha_pesaje
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='pesajes' AND column_name='fecha')
+        AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='pesajes' AND column_name='fecha_pesaje')
+        THEN ALTER TABLE pesajes RENAME COLUMN fecha TO fecha_pesaje; END IF;
+      END $$;
+    `);
+    // pesajes: add usuario_id if missing
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='pesajes' AND column_name='usuario_id')
+        THEN ALTER TABLE pesajes ADD COLUMN usuario_id INTEGER REFERENCES usuarios(id); END IF;
+      END $$;
+    `);
     console.log('✅ Migraciones de columnas completadas');
 
     // === ÍNDICES ===

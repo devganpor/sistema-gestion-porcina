@@ -7,7 +7,7 @@ interface WeightRecord {
   animal_id: number;
   animal_identificador: string;
   peso: number;
-  fecha: string;
+  fecha_pesaje: string;
   edad_dias: number;
   ganancia_diaria?: number;
   observaciones?: string;
@@ -188,7 +188,7 @@ const Weights: React.FC = () => {
     setFormData({
       animal_id: weight.animal_id.toString(),
       peso: weight.peso.toString(),
-      fecha_pesaje: weight.fecha.split('T')[0],
+      fecha_pesaje: weight.fecha_pesaje?.split('T')[0] || weight.fecha?.split('T')[0] || '',
       observaciones: weight.observaciones || ''
     });
     setSelectedWeight(weight);
@@ -387,7 +387,7 @@ const Weights: React.FC = () => {
                           {weight.peso}kg
                         </span>
                       </td>
-                      <td>{new Date(weight.fecha).toLocaleDateString()}</td>
+                      <td>{new Date(weight.fecha_pesaje).toLocaleDateString()}</td>
                       <td>{weight.edad_dias} días</td>
                       <td>
                         {weight.ganancia_diaria ? (

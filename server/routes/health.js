@@ -165,6 +165,28 @@ router.get('/withdrawal', authenticateToken, async (req, res) => {
   }
 });
 
+router.put('/events/:id', authenticateToken, async (req, res) => {
+  try {
+    const { tipo_evento, fecha, descripcion, tratamiento, veterinario, costo } = req.body;
+    await query(
+      'UPDATE eventos_sanitarios SET tipo_evento=$1, fecha=$2, descripcion=$3, tratamiento=$4, veterinario=$5, costo=$6 WHERE id=$7',
+      [tipo_evento, fecha, descripcion, tratamiento, veterinario, costo, req.params.id]
+    );
+    res.json({ message: 'Evento actualizado exitosamente' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error actualizando evento sanitario' });
+  }
+});
+
+router.delete('/events/:id', authenticateToken, async (req, res) => {
+  try {
+    await query('DELETE FROM eventos_sanitarios WHERE id=$1', [req.params.id]);
+    res.json({ message: 'Evento eliminado exitosamente' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error eliminando evento sanitario' });
+  }
+});
+
 router.put('/medications/:id', authenticateToken, async (req, res) => {
   try {
     const { nombre, tipo, dias_retiro, dosis_recomendada, stock_actual, fecha_vencimiento } = req.body;
