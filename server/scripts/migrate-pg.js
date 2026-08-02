@@ -40,6 +40,21 @@ async function createTables() {
       )
     `);
 
+    // Migrar columna 'capacidad' -> 'capacidad_maxima' si existe la versión antigua
+    await client.query(`
+      DO $$ BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='ubicaciones' AND column_name='capacidad'
+        ) AND NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='ubicaciones' AND column_name='capacidad_maxima'
+        ) THEN
+          ALTER TABLE ubicaciones RENAME COLUMN capacidad TO capacidad_maxima;
+        END IF;
+      END $$;
+    `);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS animales (
         id SERIAL PRIMARY KEY,
