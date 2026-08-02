@@ -188,7 +188,7 @@ const Weights: React.FC = () => {
     setFormData({
       animal_id: weight.animal_id.toString(),
       peso: weight.peso.toString(),
-      fecha_pesaje: weight.fecha_pesaje?.split('T')[0] || weight.fecha?.split('T')[0] || '',
+      fecha_pesaje: weight.fecha_pesaje?.split('T')[0] || '',
       observaciones: weight.observaciones || ''
     });
     setSelectedWeight(weight);
