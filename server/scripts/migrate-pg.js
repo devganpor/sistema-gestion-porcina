@@ -281,7 +281,7 @@ async function createTables() {
       INSERT INTO usuarios (email, password_hash, nombre, rol)
       VALUES ($1, $2, $3, $4)
       ON CONFLICT (email) DO NOTHING
-    `, ['admin@granja.com', adminPassword, 'Administrador', 'administrador']);
+    `, ['admin@ganpor.com', adminPassword, 'Administrador', 'administrador']);
 
     const razas = [
       ['Yorkshire', 'Raza prolífica y maternal'],

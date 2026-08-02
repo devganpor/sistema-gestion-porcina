@@ -1,56 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import api from '../services/authService';
 
-interface DashboardStats {
-  totalAnimals: number;
-  activeAnimals: number;
-  readyForSale: number;
-  pregnantSows: number;
-  monthlyRevenue: number;
-  monthlyExpenses: number;
-  profitMargin: number;
-  feedConversion: number;
+interface KPIs {
+  total_animales: number;
+  cerdas_reproductoras: number;
+  listos_para_venta: number;
+  mortalidad_ultimo_mes: number;
+  inventario: Array<{ categoria: string; cantidad: number }>;
 }
 
+interface FinancialSummary {
+  totales: { ingresos: number; gastos: number; utilidad: number; margen: number };
+}
+
+interface Alert {
+  tipo: string;
+  titulo: string;
+  mensaje: string;
+  prioridad: string;
+}
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(amount);
+
 const ModernDashboard: React.FC = () => {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [kpis, setKpis] = useState<KPIs | null>(null);
+  const [finance, setFinance] = useState<FinancialSummary | null>(null);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadDashboardData();
+    Promise.all([
+      api.get('/dashboard/kpis'),
+      api.get('/finance/summary').catch(() => ({ data: null })),
+      api.get('/dashboard/alerts').catch(() => ({ data: [] }))
+    ]).then(([kpisRes, financeRes, alertsRes]) => {
+      setKpis(kpisRes.data);
+      setFinance(financeRes.data);
+      setAlerts(alertsRes.data || []);
+    }).catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
-
-  const loadDashboardData = async () => {
-    setLoading(true);
-    try {
-      const mockStats: DashboardStats = {
-        totalAnimals: 1247,
-        activeAnimals: 1189,
-        readyForSale: 23,
-        pregnantSows: 45,
-        monthlyRevenue: 125000,
-        monthlyExpenses: 87500,
-        profitMargin: 30.2,
-        feedConversion: 2.8
-      };
-      
-      setTimeout(() => {
-        setStats(mockStats);
-        setLoading(false);
-      }, 800);
-    } catch (error) {
-      console.error('Error cargando datos del dashboard:', error);
-      setLoading(false);
-    }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0
-    }).format(amount);
-  };
 
   if (loading) {
     return (
@@ -65,134 +56,99 @@ const ModernDashboard: React.FC = () => {
     );
   }
 
+  const alertColor = (p: string) => p === 'alta' ? '#fff3cd' : p === 'media' ? '#d1ecf1' : '#d4edda';
+  const alertBorder = (p: string) => p === 'alta' ? '#ffeaa7' : p === 'media' ? '#bee5eb' : '#c3e6cb';
+  const alertIcon = (p: string) => p === 'alta' ? 'fa-exclamation-triangle' : p === 'media' ? 'fa-info-circle' : 'fa-check-circle';
+  const alertIconColor = (p: string) => p === 'alta' ? '#ffad46' : p === 'media' ? '#1572e8' : '#31ce36';
+
   return (
     <div className="page-inner">
-      {/* KPIs Principales */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+      {/* KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '30px' }}>
         <div className="card">
           <div style={{ padding: '20px', textAlign: 'center' }}>
-            <div style={{ fontSize: '2.5rem', fontWeight: '700', color: '#1572e8', marginBottom: '10px' }}>
-              {stats?.totalAnimals.toLocaleString()}
-            </div>
-            <div style={{ fontSize: '14px', color: '#6c757d', fontWeight: '600', textTransform: 'uppercase' }}>
-              Total Animales
-            </div>
-            <div style={{ fontSize: '12px', color: '#31ce36', fontWeight: '600', marginTop: '5px' }}>
-              <i className="fas fa-arrow-up" style={{ marginRight: '5px' }}></i>
-              +12 esta semana
+            <div style={{ fontSize: '2.5rem', fontWeight: '700', color: '#1572e8' }}>{kpis?.total_animales ?? 0}</div>
+            <div style={{ fontSize: '14px', color: '#6c757d', fontWeight: '600', textTransform: 'uppercase', marginTop: '8px' }}>Total Animales</div>
+          </div>
+        </div>
+        <div className="card">
+          <div style={{ padding: '20px', textAlign: 'center' }}>
+            <div style={{ fontSize: '2.5rem', fontWeight: '700', color: '#31ce36' }}>{kpis?.listos_para_venta ?? 0}</div>
+            <div style={{ fontSize: '14px', color: '#6c757d', fontWeight: '600', textTransform: 'uppercase', marginTop: '8px' }}>Listos para Venta</div>
+          </div>
+        </div>
+        <div className="card">
+          <div style={{ padding: '20px', textAlign: 'center' }}>
+            <div style={{ fontSize: '2.5rem', fontWeight: '700', color: '#ffad46' }}>{kpis?.cerdas_reproductoras ?? 0}</div>
+            <div style={{ fontSize: '14px', color: '#6c757d', fontWeight: '600', textTransform: 'uppercase', marginTop: '8px' }}>Cerdas Reproductoras</div>
+          </div>
+        </div>
+        <div className="card">
+          <div style={{ padding: '20px', textAlign: 'center' }}>
+            <div style={{ fontSize: '2.5rem', fontWeight: '700', color: '#f25961' }}>{kpis?.mortalidad_ultimo_mes ?? 0}</div>
+            <div style={{ fontSize: '14px', color: '#6c757d', fontWeight: '600', textTransform: 'uppercase', marginTop: '8px' }}>Mortalidad (30 días)</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Financiero */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+        <div className="card">
+          <div style={{ padding: '25px' }}>
+            <h5 style={{ margin: '0 0 15px', color: '#1a2035', fontWeight: '600' }}>
+              <i className="fas fa-dollar-sign" style={{ marginRight: '8px', color: '#31ce36' }}></i>Ingresos del Mes
+            </h5>
+            <div style={{ fontSize: '2rem', fontWeight: '800', color: '#31ce36' }}>
+              {formatCurrency(finance?.totales?.ingresos ?? 0)}
             </div>
           </div>
         </div>
-
         <div className="card">
-          <div style={{ padding: '20px', textAlign: 'center' }}>
-            <div style={{ fontSize: '2.5rem', fontWeight: '700', color: '#31ce36', marginBottom: '10px' }}>
-              {stats?.readyForSale}
-            </div>
-            <div style={{ fontSize: '14px', color: '#6c757d', fontWeight: '600', textTransform: 'uppercase' }}>
-              Listos para Venta
-            </div>
-            <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '5px' }}>
-              Peso promedio: 105kg
+          <div style={{ padding: '25px' }}>
+            <h5 style={{ margin: '0 0 15px', color: '#1a2035', fontWeight: '600' }}>
+              <i className="fas fa-credit-card" style={{ marginRight: '8px', color: '#f25961' }}></i>Gastos del Mes
+            </h5>
+            <div style={{ fontSize: '2rem', fontWeight: '800', color: '#f25961' }}>
+              {formatCurrency(finance?.totales?.gastos ?? 0)}
             </div>
           </div>
         </div>
-
         <div className="card">
-          <div style={{ padding: '20px', textAlign: 'center' }}>
-            <div style={{ fontSize: '2.5rem', fontWeight: '700', color: '#ffad46', marginBottom: '10px' }}>
-              {stats?.pregnantSows}
-            </div>
-            <div style={{ fontSize: '14px', color: '#6c757d', fontWeight: '600', textTransform: 'uppercase' }}>
-              Cerdas Gestantes
-            </div>
-            <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '5px' }}>
-              8 partos próximos
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div style={{ padding: '20px', textAlign: 'center' }}>
-            <div style={{ fontSize: '2.5rem', fontWeight: '700', color: '#1572e8', marginBottom: '10px' }}>
-              {stats?.feedConversion}
-            </div>
-            <div style={{ fontSize: '14px', color: '#6c757d', fontWeight: '600', textTransform: 'uppercase' }}>
-              Conversión Alimenticia
-            </div>
-            <div style={{ fontSize: '12px', color: '#31ce36', fontWeight: '600', marginTop: '5px' }}>
-              <i className="fas fa-arrow-up" style={{ marginRight: '5px' }}></i>
-              Mejorando
+          <div style={{ padding: '25px' }}>
+            <h5 style={{ margin: '0 0 15px', color: '#1a2035', fontWeight: '600' }}>
+              <i className="fas fa-percentage" style={{ marginRight: '8px', color: '#1572e8' }}></i>Margen de Ganancia
+            </h5>
+            <div style={{ fontSize: '2rem', fontWeight: '800', color: '#1572e8' }}>
+              {finance?.totales?.margen ?? 0}%
             </div>
           </div>
         </div>
       </div>
 
-      {/* Métricas Financieras */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginBottom: '30px' }}>
-        <div className="card">
-          <div style={{ padding: '25px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-              <h5 style={{ margin: 0, color: '#1a2035', fontWeight: '600' }}>
-                <i className="fas fa-dollar-sign" style={{ marginRight: '8px', color: '#31ce36' }}></i>
-                Ingresos del Mes
-              </h5>
-              <i className="fas fa-chart-line" style={{ fontSize: '24px', color: '#31ce36' }}></i>
-            </div>
-            <div style={{ fontSize: '2rem', fontWeight: '800', color: '#31ce36', marginBottom: '10px' }}>
-              {formatCurrency(stats?.monthlyRevenue || 0)}
-            </div>
-            <div style={{ fontSize: '14px', color: '#6c757d' }}>
-              +15.3% vs mes anterior
-            </div>
-          </div>
-        </div>
+      {/* Inventario + Acciones + Alertas */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
 
-        <div className="card">
-          <div style={{ padding: '25px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-              <h5 style={{ margin: 0, color: '#1a2035', fontWeight: '600' }}>
-                <i className="fas fa-credit-card" style={{ marginRight: '8px', color: '#f25961' }}></i>
-                Gastos del Mes
-              </h5>
-              <i className="fas fa-chart-line-down" style={{ fontSize: '24px', color: '#f25961' }}></i>
-            </div>
-            <div style={{ fontSize: '2rem', fontWeight: '800', color: '#f25961', marginBottom: '10px' }}>
-              {formatCurrency(stats?.monthlyExpenses || 0)}
-            </div>
-            <div style={{ fontSize: '14px', color: '#6c757d' }}>
-              +8.7% vs mes anterior
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div style={{ padding: '25px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-              <h5 style={{ margin: 0, color: '#1a2035', fontWeight: '600' }}>
-                <i className="fas fa-percentage" style={{ marginRight: '8px', color: '#1572e8' }}></i>
-                Margen de Ganancia
-              </h5>
-              <i className="fas fa-bullseye" style={{ fontSize: '24px', color: '#1572e8' }}></i>
-            </div>
-            <div style={{ fontSize: '2rem', fontWeight: '800', color: '#1572e8', marginBottom: '10px' }}>
-              {stats?.profitMargin}%
-            </div>
-            <div style={{ fontSize: '14px', color: '#6c757d' }}>
-              Meta: 35%
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Acciones Rápidas y Alertas */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
+        {/* Inventario por categoría */}
         <div className="card">
           <div className="card-header">
-            <h5 className="card-title">
-              <i className="fas fa-bolt" style={{ marginRight: '8px' }}></i>
-              Acciones Rápidas
-            </h5>
+            <h5 className="card-title"><i className="fas fa-list" style={{ marginRight: '8px' }}></i>Inventario por Categoría</h5>
+          </div>
+          <div style={{ padding: '20px' }}>
+            {kpis?.inventario && kpis.inventario.length > 0 ? kpis.inventario.map((item, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < kpis.inventario.length - 1 ? '1px solid #ebedf2' : 'none' }}>
+                <span style={{ textTransform: 'capitalize', fontWeight: '500' }}>{item.categoria}</span>
+                <span style={{ background: '#1572e8', color: 'white', padding: '2px 12px', borderRadius: '20px', fontSize: '14px' }}>{item.cantidad}</span>
+              </div>
+            )) : (
+              <p style={{ color: '#6c757d', textAlign: 'center', padding: '20px 0' }}>Sin animales registrados</p>
+            )}
+          </div>
+        </div>
+
+        {/* Acciones rápidas */}
+        <div className="card">
+          <div className="card-header">
+            <h5 className="card-title"><i className="fas fa-bolt" style={{ marginRight: '8px' }}></i>Acciones Rápidas</h5>
           </div>
           <div style={{ padding: '20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px' }}>
@@ -208,47 +164,38 @@ const ModernDashboard: React.FC = () => {
                 <i className="fas fa-medkit" style={{ display: 'block', fontSize: '24px', marginBottom: '8px' }}></i>
                 <div style={{ fontSize: '14px', fontWeight: '600' }}>Evento Sanitario</div>
               </Link>
-              <Link to="/reproduction" className="btn btn-danger" style={{ textDecoration: 'none', padding: '15px', textAlign: 'center' }}>
-                <i className="fas fa-heart" style={{ display: 'block', fontSize: '24px', marginBottom: '8px' }}></i>
-                <div style={{ fontSize: '14px', fontWeight: '600' }}>Control Reproductivo</div>
+              <Link to="/finance" className="btn btn-danger" style={{ textDecoration: 'none', padding: '15px', textAlign: 'center' }}>
+                <i className="fas fa-dollar-sign" style={{ display: 'block', fontSize: '24px', marginBottom: '8px' }}></i>
+                <div style={{ fontSize: '14px', fontWeight: '600' }}>Registrar Gasto</div>
               </Link>
             </div>
           </div>
         </div>
 
+        {/* Alertas */}
         <div className="card">
           <div className="card-header">
-            <h5 className="card-title">
-              <i className="fas fa-exclamation-triangle" style={{ marginRight: '8px' }}></i>
-              Alertas Importantes
-            </h5>
+            <h5 className="card-title"><i className="fas fa-exclamation-triangle" style={{ marginRight: '8px' }}></i>Alertas</h5>
           </div>
           <div style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: '#fff3cd', borderRadius: '8px', border: '1px solid #ffeaa7' }}>
-                <i className="fas fa-exclamation-triangle" style={{ fontSize: '20px', color: '#ffad46' }}></i>
-                <div>
-                  <div style={{ fontWeight: '600', color: '#1a2035' }}>Stock de Alimento Bajo</div>
-                  <div style={{ fontSize: '13px', color: '#6c757d' }}>Concentrado de engorde: 2 días restantes</div>
-                </div>
+            {alerts.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {alerts.map((alert, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: alertColor(alert.prioridad), borderRadius: '8px', border: `1px solid ${alertBorder(alert.prioridad)}` }}>
+                    <i className={`fas ${alertIcon(alert.prioridad)}`} style={{ fontSize: '20px', color: alertIconColor(alert.prioridad) }}></i>
+                    <div>
+                      <div style={{ fontWeight: '600', color: '#1a2035' }}>{alert.titulo}</div>
+                      <div style={{ fontSize: '13px', color: '#6c757d' }}>{alert.mensaje}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: '#d1ecf1', borderRadius: '8px', border: '1px solid #bee5eb' }}>
-                <i className="fas fa-syringe" style={{ fontSize: '20px', color: '#1572e8' }}></i>
-                <div>
-                  <div style={{ fontWeight: '600', color: '#1a2035' }}>Vacunación Programada</div>
-                  <div style={{ fontSize: '13px', color: '#6c757d' }}>15 animales requieren vacuna triple</div>
-                </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '30px 0', color: '#31ce36' }}>
+                <i className="fas fa-check-circle" style={{ fontSize: '36px', marginBottom: '10px', display: 'block' }}></i>
+                <p style={{ margin: 0, fontWeight: '600' }}>Sin alertas pendientes</p>
               </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: '#d4edda', borderRadius: '8px', border: '1px solid #c3e6cb' }}>
-                <i className="fas fa-check-circle" style={{ fontSize: '20px', color: '#31ce36' }}></i>
-                <div>
-                  <div style={{ fontWeight: '600', color: '#1a2035' }}>Meta Alcanzada</div>
-                  <div style={{ fontSize: '13px', color: '#6c757d' }}>Conversión alimenticia mejoró 5%</div>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
