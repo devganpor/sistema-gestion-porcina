@@ -316,6 +316,73 @@ async function createTables() {
       `, [nombre, tipo, capacidad, descripcion]);
     }
 
+    // === TABLAS DE NUTRICIÓN ===
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS dietas (
+        id SERIAL PRIMARY KEY,
+        nombre VARCHAR(100) NOT NULL,
+        categoria_animal VARCHAR(50),
+        proteina_porcentaje DECIMAL(5,2),
+        energia_kcal DECIMAL(8,2),
+        fibra_porcentaje DECIMAL(5,2),
+        costo_por_kg DECIMAL(10,2) DEFAULT 0,
+        descripcion TEXT,
+        activa BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ingredientes (
+        id SERIAL PRIMARY KEY,
+        nombre VARCHAR(100) NOT NULL,
+        tipo VARCHAR(50),
+        proteina_porcentaje DECIMAL(5,2),
+        energia_kcal DECIMAL(8,2),
+        fibra_porcentaje DECIMAL(5,2),
+        costo_por_kg DECIMAL(10,2) DEFAULT 0,
+        stock_actual DECIMAL(10,2) DEFAULT 0,
+        stock_minimo DECIMAL(10,2) DEFAULT 0,
+        unidad_medida VARCHAR(20) DEFAULT 'kg',
+        proveedor VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS dieta_ingredientes (
+        id SERIAL PRIMARY KEY,
+        dieta_id INTEGER REFERENCES dietas(id) ON DELETE CASCADE,
+        ingrediente_id INTEGER REFERENCES ingredientes(id),
+        porcentaje DECIMAL(5,2) NOT NULL
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS registro_alimentacion (
+        id SERIAL PRIMARY KEY,
+        ubicacion_id INTEGER REFERENCES ubicaciones(id),
+        dieta_id INTEGER REFERENCES dietas(id),
+        cantidad_kg DECIMAL(8,2) NOT NULL,
+        fecha_suministro DATE NOT NULL,
+        hora_suministro TIME,
+        responsable_id INTEGER REFERENCES usuarios(id),
+        observaciones TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS conversion_alimenticia (
+        id SERIAL PRIMARY KEY,
+        animal_id INTEGER REFERENCES animales(id),
+        periodo_inicio DATE,
+        periodo_fin DATE,
+        peso_inicial DECIMAL(6,2),
+        peso_final DECIMAL(6,2),
+        alimento_consumido DECIMAL(8,2),
+        conversion_calculada DECIMAL(6,3),
+        ganancia_diaria DECIMAL(6,3),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     console.log('✅ Datos iniciales insertados');
     console.log('🎉 Migración completada exitosamente');
 

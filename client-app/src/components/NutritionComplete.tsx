@@ -4,10 +4,11 @@ import api from '../services/authService';
 interface Diet {
   id: number;
   nombre: string;
-  categoria: string;
-  costo_kg: number;
-  proteina: number;
-  energia: number;
+  categoria_animal: string;
+  costo_por_kg: number;
+  proteina_porcentaje: number;
+  energia_kcal: number;
+  total_ingredientes?: number;
 }
 
 interface FeedingRecord {
@@ -42,7 +43,7 @@ const NutritionComplete: React.FC = () => {
     try {
       const [dietsRes, recordsRes] = await Promise.all([
         api.get('/nutrition/diets').catch(() => ({ data: [] })),
-        api.get('/nutrition/feeding-records').catch(() => ({ data: [] }))
+        api.get('/nutrition/feeding').catch(() => ({ data: [] }))
       ]);
       setDiets(dietsRes.data);
       setFeedingRecords(recordsRes.data);
@@ -56,16 +57,15 @@ const NutritionComplete: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/nutrition/diets', formData);
-      alert('Dieta registrada exitosamente');
-      setFormData({
-        nombre: '',
-        categoria: 'lechon',
-        costo_kg: '',
-        proteina: '',
-        energia: '',
-        ingredientes: ''
+      await api.post('/nutrition/diets', {
+        nombre: formData.nombre,
+        categoria_animal: formData.categoria,
+        costo_por_kg: formData.costo_kg ? parseFloat(formData.costo_kg) : 0,
+        proteina_porcentaje: formData.proteina ? parseFloat(formData.proteina) : null,
+        energia_kcal: formData.energia ? parseFloat(formData.energia) : null,
+        descripcion: formData.ingredientes
       });
+      setFormData({ nombre: '', categoria: 'lechon', costo_kg: '', proteina: '', energia: '', ingredientes: '' });
       setShowForm(false);
       loadData();
     } catch (error) {
@@ -288,13 +288,13 @@ const NutritionComplete: React.FC = () => {
                 </div>
                 <div style={{ background: '#f8f9fa', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
                   <div style={{ fontSize: '28px', fontWeight: '700', color: '#31ce36' }}>
-                    {diets.length > 0 ? Math.round(diets.reduce((acc, d) => acc + (d.costo_kg || 0), 0) / diets.length) : 0}
+                    {diets.length > 0 ? Math.round(diets.reduce((acc, d) => acc + (d.costo_por_kg || 0), 0) / diets.length) : 0}
                   </div>
                   <div style={{ fontSize: '14px', color: '#6c757d', fontWeight: '600' }}>COSTO PROMEDIO/KG</div>
                 </div>
                 <div style={{ background: '#f8f9fa', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
                   <div style={{ fontSize: '28px', fontWeight: '700', color: '#ffad46' }}>
-                    {new Set(diets.map(d => d.categoria)).size}
+                    {new Set(diets.map(d => d.categoria_animal)).size}
                   </div>
                   <div style={{ fontSize: '14px', color: '#6c757d', fontWeight: '600' }}>CATEGORÍAS</div>
                 </div>
@@ -327,12 +327,12 @@ const NutritionComplete: React.FC = () => {
                             color: '#ffffff',
                             textTransform: 'capitalize'
                           }}>
-                            {diet.categoria}
+                            {diet.categoria_animal}
                           </span>
                         </td>
-                        <td>${diet.costo_kg?.toLocaleString() || 0}</td>
-                        <td>{diet.proteina || '-'}%</td>
-                        <td>{diet.energia || '-'} Mcal/kg</td>
+                        <td>${diet.costo_por_kg?.toLocaleString() || 0}</td>
+                        <td>{diet.proteina_porcentaje || '-'}%</td>
+                        <td>{diet.energia_kcal || '-'} kcal/kg</td>
                         <td>
                           <div style={{ display: 'flex', gap: '5px' }}>
                             <button className="btn btn-primary btn-sm" title="Ver">
