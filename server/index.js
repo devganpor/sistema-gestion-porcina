@@ -159,7 +159,4 @@ app.listen(PORT, '0.0.0.0', () => {
   
   // Iniciar backup automático
   backupService.scheduleAutoBackup();
-  
-  // Rotar logs al iniciar
-  auditLogger.rotateLogs();
 });
