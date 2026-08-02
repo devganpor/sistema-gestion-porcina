@@ -248,4 +248,121 @@ router.get('/inventory-alerts', authenticateToken, async (req, res) => {
   }
 });
 
+// ===================== PLANES DE ALIMENTACIÓN =====================
+
+// Listar planes
+router.get('/plans', authenticateToken, async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT p.*, u.nombre as usuario_nombre,
+        COUNT(e.id) as total_etapas,
+        COALESCE(SUM(e.dias_fin - e.dias_inicio + 1), 0) as total_dias
+      FROM planes_alimentacion p
+      LEFT JOIN usuarios u ON p.usuario_id = u.id
+      LEFT JOIN plan_etapas e ON p.id = e.plan_id
+      WHERE p.activo = true
+      GROUP BY p.id, u.nombre
+      ORDER BY p.created_at DESC
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Error obteniendo planes' });
+  }
+});
+
+// Detalle de un plan con etapas y proyección día a día
+router.get('/plans/:id', authenticateToken, async (req, res) => {
+  try {
+    const [planRes, etapasRes] = await Promise.all([
+      query('SELECT * FROM planes_alimentacion WHERE id=$1', [req.params.id]),
+      query('SELECT * FROM plan_etapas WHERE plan_id=$1 ORDER BY semana', [req.params.id])
+    ]);
+    if (planRes.rows.length === 0) return res.status(404).json({ error: 'Plan no encontrado' });
+    const plan = planRes.rows[0];
+    const etapas = etapasRes.rows;
+
+    // Generar proyección día a día
+    const dias = [];
+    const fechaInicio = new Date(plan.fecha_inicio);
+    etapas.forEach(etapa => {
+      for (let d = etapa.dias_inicio; d <= etapa.dias_fin; d++) {
+        const fecha = new Date(fechaInicio);
+        fecha.setDate(fecha.getDate() + d - 1);
+        const consumoDiarioTotal = Math.round(parseFloat(etapa.cad_kg_animal) * plan.total_animales);
+        const sacosDiarios = Math.ceil(consumoDiarioTotal / parseFloat(plan.kg_por_saco));
+        dias.push({
+          dia: d,
+          fecha: fecha.toISOString().split('T')[0],
+          semana: etapa.semana,
+          alimento: etapa.alimento,
+          cad_kg_animal: parseFloat(etapa.cad_kg_animal),
+          total_animales: plan.total_animales,
+          consumo_diario_total: consumoDiarioTotal,
+          sacos_diarios: sacosDiarios
+        });
+      }
+    });
+
+    // Resumen por etapa
+    const resumenEtapas = etapas.map(e => {
+      const diasEtapa = e.dias_fin - e.dias_inicio + 1;
+      const consumoEtapa = parseFloat(e.cad_kg_animal) * plan.total_animales * diasEtapa;
+      return {
+        semana: e.semana,
+        alimento: e.alimento,
+        cad_kg_animal: parseFloat(e.cad_kg_animal),
+        dias: diasEtapa,
+        consumo_total_kg: Math.round(consumoEtapa),
+        sacos_etapa: Math.ceil(consumoEtapa / parseFloat(plan.kg_por_saco))
+      };
+    });
+
+    res.json({ plan, etapas, dias, resumenEtapas });
+  } catch (error) {
+    res.status(500).json({ error: 'Error obteniendo detalle del plan' });
+  }
+});
+
+// Crear plan con etapas
+router.post('/plans', authenticateToken, async (req, res) => {
+  const { nombre, descripcion, total_animales, kg_por_saco, fecha_inicio, etapas } = req.body;
+  if (!nombre || !total_animales || !fecha_inicio || !Array.isArray(etapas) || etapas.length === 0)
+    return res.status(400).json({ error: 'Faltan campos requeridos' });
+
+  const client = await require('../config/database-pg').pool.connect();
+  try {
+    await client.query('BEGIN');
+    const planRes = await client.query(
+      `INSERT INTO planes_alimentacion (nombre, descripcion, total_animales, kg_por_saco, fecha_inicio, usuario_id)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [nombre, descripcion || null, total_animales, kg_por_saco || 40, fecha_inicio, req.user.id]
+    );
+    const planId = planRes.rows[0].id;
+    for (const e of etapas) {
+      await client.query(
+        `INSERT INTO plan_etapas (plan_id, semana, alimento, cad_kg_animal, dias_inicio, dias_fin)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [planId, e.semana, e.alimento || null, e.cad_kg_animal, e.dias_inicio, e.dias_fin]
+      );
+    }
+    await client.query('COMMIT');
+    res.status(201).json({ id: planId, message: 'Plan creado exitosamente' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Error creando plan' });
+  } finally {
+    client.release();
+  }
+});
+
+// Eliminar plan
+router.delete('/plans/:id', authenticateToken, async (req, res) => {
+  try {
+    await query('UPDATE planes_alimentacion SET activo=false WHERE id=$1', [req.params.id]);
+    res.json({ message: 'Plan eliminado' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error eliminando plan' });
+  }
+});
+
 module.exports = router;

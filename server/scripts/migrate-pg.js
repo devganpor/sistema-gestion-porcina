@@ -438,6 +438,33 @@ async function createTables() {
       )
     `);
 
+    // === PLANES DE ALIMENTACIÓN ===
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS planes_alimentacion (
+        id SERIAL PRIMARY KEY,
+        nombre VARCHAR(150) NOT NULL,
+        descripcion TEXT,
+        total_animales INTEGER NOT NULL DEFAULT 1,
+        kg_por_saco DECIMAL(6,2) NOT NULL DEFAULT 40,
+        fecha_inicio DATE NOT NULL,
+        activo BOOLEAN DEFAULT true,
+        usuario_id INTEGER REFERENCES usuarios(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS plan_etapas (
+        id SERIAL PRIMARY KEY,
+        plan_id INTEGER REFERENCES planes_alimentacion(id) ON DELETE CASCADE,
+        semana INTEGER NOT NULL,
+        alimento VARCHAR(100),
+        cad_kg_animal DECIMAL(6,3) NOT NULL,
+        dias_inicio INTEGER NOT NULL,
+        dias_fin INTEGER NOT NULL
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_plan_etapas_plan ON plan_etapas(plan_id)`);
+
     console.log('✅ Datos iniciales insertados');
     console.log('🎉 Migración completada exitosamente');
 

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import api from '../services/authService';
 
 interface Diet {
@@ -11,6 +12,45 @@ interface Diet {
   descripcion?: string;
 }
 
+interface Etapa {
+  semana: number;
+  alimento: string;
+  cad_kg_animal: number;
+  dias_inicio: number;
+  dias_fin: number;
+}
+
+interface Plan {
+  id: number;
+  nombre: string;
+  descripcion?: string;
+  total_animales: number;
+  kg_por_saco: number;
+  fecha_inicio: string;
+  total_etapas: number;
+  total_dias: number;
+}
+
+interface DiaPlan {
+  dia: number;
+  fecha: string;
+  semana: number;
+  alimento: string;
+  cad_kg_animal: number;
+  total_animales: number;
+  consumo_diario_total: number;
+  sacos_diarios: number;
+}
+
+interface ResumenEtapa {
+  semana: number;
+  alimento: string;
+  cad_kg_animal: number;
+  dias: number;
+  consumo_total_kg: number;
+  sacos_etapa: number;
+}
+
 const emptyForm = {
   nombre: '',
   categoria: 'lechon',
@@ -20,7 +60,35 @@ const emptyForm = {
   descripcion: ''
 };
 
+const emptyPlanForm = {
+  nombre: '',
+  descripcion: '',
+  total_animales: '',
+  kg_por_saco: '40',
+  fecha_inicio: new Date().toISOString().split('T')[0]
+};
+
+// Convierte número serial de Excel a fecha YYYY-MM-DD
+const excelDateToISO = (val: any): string => {
+  if (!val) return '';
+  if (val instanceof Date) return val.toISOString().split('T')[0];
+  if (typeof val === 'number') {
+    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+    return d.toISOString().split('T')[0];
+  }
+  // string tipo "31/7/2026" o "31-07-2026"
+  const s = val.toString().trim();
+  const parts = s.split(/[\/\-]/);
+  if (parts.length === 3) {
+    const [a, b, c] = parts;
+    if (c.length === 4) return `${c}-${b.padStart(2,'0')}-${a.padStart(2,'0')}`;
+    return s;
+  }
+  return s;
+};
+
 const NutritionComplete: React.FC = () => {
+  // --- Dietas ---
   const [diets, setDiets] = useState<Diet[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dietas');
@@ -29,19 +97,40 @@ const NutritionComplete: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [formData, setFormData] = useState(emptyForm);
 
+  // --- Planes ---
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [planDetail, setPlanDetail] = useState<{ dias: DiaPlan[]; resumenEtapas: ResumenEtapa[] } | null>(null);
+  const [planDetailTab, setPlanDetailTab] = useState<'dias' | 'resumen'>('resumen');
+  const [showPlanForm, setShowPlanForm] = useState(false);
+  const [planForm, setPlanForm] = useState(emptyPlanForm);
+  const [planEtapas, setPlanEtapas] = useState<Etapa[]>([]);
+  const [planLoading, setPlanLoading] = useState(false);
+
+  // --- Carga masiva de plan ---
+  const planFileRef = useRef<HTMLInputElement>(null);
+  const [showBulkPlan, setShowBulkPlan] = useState(false);
+  const [bulkEtapas, setBulkEtapas] = useState<Etapa[]>([]);
+  const [bulkPlanMeta, setBulkPlanMeta] = useState({ total_animales: '', kg_por_saco: '40', fecha_inicio: '', nombre: '' });
+
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     try {
-      const res = await api.get('/nutrition/diets').catch(() => ({ data: [] }));
-      setDiets(res.data);
+      const [dietsRes, plansRes] = await Promise.all([
+        api.get('/nutrition/diets').catch(() => ({ data: [] })),
+        api.get('/nutrition/plans').catch(() => ({ data: [] }))
+      ]);
+      setDiets(dietsRes.data);
+      setPlans(plansRes.data);
     } catch (error) {
-      console.error('Error cargando dietas:', error);
+      console.error('Error cargando datos:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  // ---- Dietas ----
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -99,6 +188,112 @@ const NutritionComplete: React.FC = () => {
     setShowForm(false);
   };
 
+  // ---- Planes ----
+  const loadPlanDetail = async (plan: Plan) => {
+    setPlanLoading(true);
+    setSelectedPlan(plan);
+    try {
+      const res = await api.get(`/nutrition/plans/${plan.id}`);
+      setPlanDetail({ dias: res.data.dias, resumenEtapas: res.data.resumenEtapas });
+    } catch { alert('Error cargando detalle del plan'); }
+    finally { setPlanLoading(false); }
+  };
+
+  const handleDeletePlan = async (id: number, nombre: string) => {
+    if (!window.confirm(`¿Eliminar el plan "${nombre}"?`)) return;
+    try {
+      await api.delete(`/nutrition/plans/${id}`);
+      setSuccess('Plan eliminado');
+      setSelectedPlan(null); setPlanDetail(null);
+      loadData();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch { alert('Error eliminando plan'); }
+  };
+
+  const handleSavePlan = async () => {
+    if (!planForm.nombre || !planForm.total_animales || !planForm.fecha_inicio || planEtapas.length === 0) {
+      alert('Completa nombre, total animales, fecha inicio y al menos una etapa'); return;
+    }
+    setPlanLoading(true);
+    try {
+      await api.post('/nutrition/plans', {
+        nombre: planForm.nombre,
+        descripcion: planForm.descripcion || null,
+        total_animales: parseInt(planForm.total_animales),
+        kg_por_saco: parseFloat(planForm.kg_por_saco) || 40,
+        fecha_inicio: planForm.fecha_inicio,
+        etapas: planEtapas
+      });
+      setSuccess('Plan creado exitosamente');
+      setShowPlanForm(false); setShowBulkPlan(false);
+      setPlanForm(emptyPlanForm); setPlanEtapas([]);
+      setBulkEtapas([]);
+      loadData();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch { alert('Error guardando plan'); }
+    finally { setPlanLoading(false); }
+  };
+
+  // ---- Excel: descarga plantilla ----
+  const downloadPlanTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['SEMANA', 'ALIMENTO', 'CAD_KG_ANIMAL', 'DIA_INICIO', 'DIA_FIN'],
+      [1, 'CRECIMIENTO 1 HARINA', 1.45, 1, 7],
+      [2, 'CRECIMIENTO 1 HARINA', 1.65, 8, 14],
+      [3, 'CRECIMIENTO 1 HARINA', 1.75, 15, 21],
+      [4, 'CRECIMIENTO 1 HARINA', 1.90, 22, 28],
+      [5, 'CRECIMIENTO 1 HARINA', 2.05, 29, 35],
+      [6, 'CRECIMIENTO 2 HARINA', 2.15, 36, 42],
+      [7, 'CRECIMIENTO 2 HARINA', 2.30, 43, 49],
+      [8, 'CRECIMIENTO 2 HARINA', 2.45, 50, 56],
+      [9, 'CRECIMIENTO 2 HARINA', 2.55, 57, 63],
+      [10, 'FINALIZADOR HARINA', 2.70, 64, 70],
+      [11, 'FINALIZADOR HARINA', 2.80, 71, 77],
+      [12, 'FINALIZADOR HARINA', 2.90, 78, 84],
+      [13, 'FINALIZADOR HARINA', 3.00, 85, 91]
+    ]);
+    ws['!cols'] = [10, 25, 16, 12, 10].map(w => ({ wch: w }));
+    const ref = XLSX.utils.aoa_to_sheet([
+      ['CAMPO', 'DESCRIPCIÓN'],
+      ['SEMANA', 'Número de semana (1, 2, 3...)'],
+      ['ALIMENTO', 'Nombre del alimento (ej: CRECIMIENTO 1 HARINA)'],
+      ['CAD_KG_ANIMAL', 'Consumo diario en kg por animal (ej: 1.45)'],
+      ['DIA_INICIO', 'Día de inicio de esta etapa (ej: 1)'],
+      ['DIA_FIN', 'Día de fin de esta etapa (ej: 7)']
+    ]);
+    ref['!cols'] = [16, 45].map(w => ({ wch: w }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Etapas');
+    XLSX.utils.book_append_sheet(wb, ref, 'Referencia');
+    XLSX.writeFile(wb, 'plantilla_plan_alimentacion.xlsx');
+  };
+
+  // ---- Excel: parsear archivo ----
+  const handlePlanFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+      const wb = XLSX.read(data, { type: 'array', cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      const etapas: Etapa[] = rows
+        .filter(r => r['SEMANA'] !== '' && r['CAD_KG_ANIMAL'] !== '')
+        .map(r => ({
+          semana: parseInt(r['SEMANA']),
+          alimento: (r['ALIMENTO'] || '').toString().trim(),
+          cad_kg_animal: parseFloat((r['CAD_KG_ANIMAL'] || '0').toString().replace(',', '.')),
+          dias_inicio: parseInt(r['DIA_INICIO']),
+          dias_fin: parseInt(r['DIA_FIN'])
+        }))
+        .filter(e => !isNaN(e.semana) && !isNaN(e.cad_kg_animal) && !isNaN(e.dias_inicio) && !isNaN(e.dias_fin));
+      setBulkEtapas(etapas);
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+  };
+
   const tabBtn = (tab: string, icon: string, label: string) => (
     <button onClick={() => setActiveTab(tab)} style={{
       padding: '12px 20px', border: 'none', cursor: 'pointer', fontWeight: '600',
@@ -109,6 +304,8 @@ const NutritionComplete: React.FC = () => {
       <i className={`fas ${icon}`} style={{ marginRight: '8px' }}></i>{label}
     </button>
   );
+
+  const inp = (style?: any) => ({ width: '100%', padding: '10px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px', ...style });
 
   if (loading) return (
     <div className="page-inner"><div className="card">
@@ -128,20 +325,41 @@ const NutritionComplete: React.FC = () => {
       )}
       <div className="card">
         <div className="card-header">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             <h4 className="card-title">
               <i className="fas fa-seedling" style={{ marginRight: '10px' }}></i>
               Nutrición y Alimentación
             </h4>
-            <button className="btn btn-primary" onClick={() => { resetForm(); setShowForm(!showForm); }}>
-              <i className={`fas ${showForm ? 'fa-times' : 'fa-plus'}`} style={{ marginRight: '8px' }}></i>
-              {showForm ? 'Cancelar' : 'Nueva Dieta'}
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {activeTab === 'dietas' && (
+                <button className="btn btn-primary" onClick={() => { resetForm(); setShowForm(!showForm); }}>
+                  <i className={`fas ${showForm ? 'fa-times' : 'fa-plus'}`} style={{ marginRight: '8px' }}></i>
+                  {showForm ? 'Cancelar' : 'Nueva Dieta'}
+                </button>
+              )}
+              {activeTab === 'planes' && !selectedPlan && (
+                <>
+                  <button className="btn btn-success" onClick={() => { setShowBulkPlan(true); setShowPlanForm(false); }}>
+                    <i className="fas fa-file-excel" style={{ marginRight: '8px' }}></i>Cargar Excel
+                  </button>
+                  <button className="btn btn-primary" onClick={() => { setShowPlanForm(true); setShowBulkPlan(false); setPlanEtapas([]); setPlanForm(emptyPlanForm); }}>
+                    <i className="fas fa-plus" style={{ marginRight: '8px' }}></i>Nuevo Plan
+                  </button>
+                </>
+              )}
+              {activeTab === 'planes' && selectedPlan && (
+                <button className="btn btn-secondary" onClick={() => { setSelectedPlan(null); setPlanDetail(null); }}>
+                  <i className="fas fa-arrow-left" style={{ marginRight: '8px' }}></i>Volver a Planes
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
         <div style={{ padding: '25px' }}>
-          {showForm && (
+
+          {/* Formulario dieta */}
+          {activeTab === 'dietas' && showForm && (
             <div className="card" style={{ marginBottom: '25px' }}>
               <div className="card-header">
                 <h5 className="card-title">
@@ -154,15 +372,11 @@ const NutritionComplete: React.FC = () => {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px', marginBottom: '15px' }}>
                     <div>
                       <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>Nombre *</label>
-                      <input type="text" value={formData.nombre} required
-                        onChange={(e) => setFormData({...formData, nombre: e.target.value})}
-                        style={{ width: '100%', padding: '10px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px' }}
-                        placeholder="Ej: Iniciador Lechones" />
+                      <input type="text" value={formData.nombre} required onChange={e => setFormData({...formData, nombre: e.target.value})} style={inp()} placeholder="Ej: Iniciador Lechones" />
                     </div>
                     <div>
                       <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>Categoría Animal</label>
-                      <select value={formData.categoria} onChange={(e) => setFormData({...formData, categoria: e.target.value})}
-                        style={{ width: '100%', padding: '10px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px' }}>
+                      <select value={formData.categoria} onChange={e => setFormData({...formData, categoria: e.target.value})} style={inp()}>
                         <option value="lechon">Lechón</option>
                         <option value="recria">Recría</option>
                         <option value="desarrollo">Desarrollo</option>
@@ -176,38 +390,23 @@ const NutritionComplete: React.FC = () => {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', marginBottom: '15px' }}>
                     <div>
                       <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>Costo por Kg ($)</label>
-                      <input type="number" step="0.01" value={formData.costo_kg}
-                        onChange={(e) => setFormData({...formData, costo_kg: e.target.value})}
-                        style={{ width: '100%', padding: '10px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px' }}
-                        placeholder="1500" />
+                      <input type="number" step="0.01" value={formData.costo_kg} onChange={e => setFormData({...formData, costo_kg: e.target.value})} style={inp()} placeholder="1500" />
                     </div>
                     <div>
                       <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>Proteína (%)</label>
-                      <input type="number" step="0.1" value={formData.proteina}
-                        onChange={(e) => setFormData({...formData, proteina: e.target.value})}
-                        style={{ width: '100%', padding: '10px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px' }}
-                        placeholder="18.5" />
+                      <input type="number" step="0.1" value={formData.proteina} onChange={e => setFormData({...formData, proteina: e.target.value})} style={inp()} placeholder="18.5" />
                     </div>
                     <div>
                       <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>Energía (kcal/kg)</label>
-                      <input type="number" step="1" value={formData.energia}
-                        onChange={(e) => setFormData({...formData, energia: e.target.value})}
-                        style={{ width: '100%', padding: '10px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px' }}
-                        placeholder="3200" />
+                      <input type="number" step="1" value={formData.energia} onChange={e => setFormData({...formData, energia: e.target.value})} style={inp()} placeholder="3200" />
                     </div>
                   </div>
                   <div style={{ marginBottom: '20px' }}>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600' }}>Descripción / Ingredientes</label>
-                    <textarea value={formData.descripcion} rows={3}
-                      onChange={(e) => setFormData({...formData, descripcion: e.target.value})}
-                      style={{ width: '100%', padding: '10px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px', resize: 'vertical' }}
-                      placeholder="Maíz 60%, Soya 25%, Vitaminas 5%..." />
+                    <textarea value={formData.descripcion} rows={3} onChange={e => setFormData({...formData, descripcion: e.target.value})} style={inp({ resize: 'vertical' })} placeholder="Maíz 60%, Soya 25%..." />
                   </div>
                   <div style={{ display: 'flex', gap: '10px' }}>
-                    <button type="submit" className="btn btn-success">
-                      <i className="fas fa-save" style={{ marginRight: '8px' }}></i>
-                      {editingId ? 'Actualizar' : 'Guardar'}
-                    </button>
+                    <button type="submit" className="btn btn-success"><i className="fas fa-save" style={{ marginRight: '8px' }}></i>{editingId ? 'Actualizar' : 'Guardar'}</button>
                     <button type="button" className="btn btn-secondary" onClick={resetForm}>Cancelar</button>
                   </div>
                 </form>
@@ -215,9 +414,11 @@ const NutritionComplete: React.FC = () => {
             </div>
           )}
 
+          {/* Tabs */}
           <div style={{ display: 'flex', marginBottom: '20px', borderBottom: '1px solid #ebedf2' }}>
             {tabBtn('dietas', 'fa-utensils', 'Dietas')}
-            {tabBtn('registros', 'fa-clipboard-list', 'Registros de Alimentación')}
+            {tabBtn('planes', 'fa-calendar-alt', 'Planes de Alimentación')}
+            {tabBtn('registros', 'fa-clipboard-list', 'Registros')}
           </div>
 
           {activeTab === 'dietas' && (
@@ -293,6 +494,343 @@ const NutritionComplete: React.FC = () => {
             </div>
           )}
 
+          {/* ============ TAB PLANES ============ */}
+          {activeTab === 'planes' && (
+            <div>
+
+              {/* --- Formulario carga Excel --- */}
+              {showBulkPlan && !selectedPlan && (
+                <div className="card" style={{ marginBottom: '20px', border: '1px solid #c3e6cb' }}>
+                  <div className="card-header" style={{ background: '#d4edda' }}>
+                    <h5 className="card-title" style={{ color: '#155724', margin: 0 }}>
+                      <i className="fas fa-file-excel" style={{ marginRight: '8px' }}></i>Cargar Plan desde Excel
+                    </h5>
+                  </div>
+                  <div style={{ padding: '20px' }}>
+                    {/* Paso 1 */}
+                    <div style={{ background: '#f0f7ff', border: '1px solid #bee3f8', borderRadius: '8px', padding: '14px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                      <div>
+                        <div style={{ fontWeight: '700', color: '#1a2035' }}><i className="fas fa-download" style={{ marginRight: '8px', color: '#1572e8' }}></i>Paso 1 — Descarga la plantilla</div>
+                        <div style={{ fontSize: '13px', color: '#6c757d' }}>Columnas: SEMANA, ALIMENTO, CAD_KG_ANIMAL, DIA_INICIO, DIA_FIN</div>
+                      </div>
+                      <button className="btn btn-primary btn-sm" onClick={downloadPlanTemplate}>
+                        <i className="fas fa-file-download" style={{ marginRight: '6px' }}></i>Descargar Plantilla
+                      </button>
+                    </div>
+
+                    {/* Paso 2 */}
+                    <div style={{ background: '#f8f9fa', border: '2px dashed #dee2e6', borderRadius: '8px', padding: '16px', marginBottom: '16px', textAlign: 'center' }}>
+                      <div style={{ fontWeight: '700', color: '#1a2035', marginBottom: '8px' }}><i className="fas fa-upload" style={{ marginRight: '8px', color: '#ffad46' }}></i>Paso 2 — Sube tu archivo Excel</div>
+                      <input ref={planFileRef} type="file" accept=".xlsx,.xls" onChange={handlePlanFileChange} style={{ display: 'none' }} />
+                      <button className="btn btn-warning btn-sm" onClick={() => planFileRef.current?.click()}>
+                        <i className="fas fa-folder-open" style={{ marginRight: '6px' }}></i>Seleccionar Archivo
+                      </button>
+                      {bulkEtapas.length > 0 && (
+                        <div style={{ marginTop: '10px', color: '#155724', fontWeight: '600' }}>
+                          <i className="fas fa-check-circle" style={{ marginRight: '6px' }}></i>{bulkEtapas.length} etapas detectadas
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Preview etapas */}
+                    {bulkEtapas.length > 0 && (
+                      <div style={{ marginBottom: '16px' }}>
+                        <div style={{ fontWeight: '600', marginBottom: '8px', color: '#1a2035' }}>Vista previa de etapas:</div>
+                        <div className="table-responsive">
+                          <table className="table" style={{ fontSize: '13px' }}>
+                            <thead><tr><th>Semana</th><th>Alimento</th><th>CAD kg/animal</th><th>Día inicio</th><th>Día fin</th><th>Días</th></tr></thead>
+                            <tbody>
+                              {bulkEtapas.map((e, i) => (
+                                <tr key={i}>
+                                  <td>{e.semana}</td>
+                                  <td>{e.alimento}</td>
+                                  <td style={{ fontWeight: '600', color: '#1572e8' }}>{e.cad_kg_animal}</td>
+                                  <td>{e.dias_inicio}</td>
+                                  <td>{e.dias_fin}</td>
+                                  <td>{e.dias_fin - e.dias_inicio + 1}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Paso 3: datos del plan */}
+                    {bulkEtapas.length > 0 && (
+                      <div style={{ background: '#fff3cd', border: '1px solid #ffeaa7', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+                        <div style={{ fontWeight: '700', color: '#856404', marginBottom: '12px' }}><i className="fas fa-cog" style={{ marginRight: '8px' }}></i>Paso 3 — Configura el plan</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                          <div>
+                            <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', fontSize: '13px' }}>Nombre del plan *</label>
+                            <input type="text" value={bulkPlanMeta.nombre} onChange={e => setBulkPlanMeta({...bulkPlanMeta, nombre: e.target.value})} style={inp()} placeholder="Ej: Engorde Lote Ago 2026" />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', fontSize: '13px' }}>Total animales *</label>
+                            <input type="number" value={bulkPlanMeta.total_animales} onChange={e => setBulkPlanMeta({...bulkPlanMeta, total_animales: e.target.value})} style={inp()} placeholder="68" />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', fontSize: '13px' }}>Kg por saco</label>
+                            <input type="number" value={bulkPlanMeta.kg_por_saco} onChange={e => setBulkPlanMeta({...bulkPlanMeta, kg_por_saco: e.target.value})} style={inp()} placeholder="40" />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', fontSize: '13px' }}>Fecha inicio *</label>
+                            <input type="date" value={bulkPlanMeta.fecha_inicio} onChange={e => setBulkPlanMeta({...bulkPlanMeta, fecha_inicio: e.target.value})} style={inp()} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      {bulkEtapas.length > 0 && (
+                        <button className="btn btn-success" disabled={planLoading} onClick={async () => {
+                          if (!bulkPlanMeta.nombre || !bulkPlanMeta.total_animales || !bulkPlanMeta.fecha_inicio) {
+                            alert('Completa nombre, total animales y fecha inicio'); return;
+                          }
+                          setPlanLoading(true);
+                          try {
+                            await api.post('/nutrition/plans', {
+                              nombre: bulkPlanMeta.nombre,
+                              total_animales: parseInt(bulkPlanMeta.total_animales),
+                              kg_por_saco: parseFloat(bulkPlanMeta.kg_por_saco) || 40,
+                              fecha_inicio: bulkPlanMeta.fecha_inicio,
+                              etapas: bulkEtapas
+                            });
+                            setSuccess('Plan creado exitosamente');
+                            setShowBulkPlan(false); setBulkEtapas([]);
+                            setBulkPlanMeta({ total_animales: '', kg_por_saco: '40', fecha_inicio: '', nombre: '' });
+                            loadData(); setTimeout(() => setSuccess(''), 3000);
+                          } catch { alert('Error guardando plan'); }
+                          finally { setPlanLoading(false); }
+                        }}>
+                          <i className={`fas ${planLoading ? 'fa-spinner fa-spin' : 'fa-save'}`} style={{ marginRight: '8px' }}></i>
+                          {planLoading ? 'Guardando...' : 'Guardar Plan'}
+                        </button>
+                      )}
+                      <button className="btn btn-secondary" onClick={() => { setShowBulkPlan(false); setBulkEtapas([]); }}>Cancelar</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* --- Formulario manual --- */}
+              {showPlanForm && !selectedPlan && (
+                <div className="card" style={{ marginBottom: '20px' }}>
+                  <div className="card-header">
+                    <h5 className="card-title"><i className="fas fa-plus" style={{ marginRight: '8px' }}></i>Nuevo Plan Manual</h5>
+                  </div>
+                  <div style={{ padding: '20px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', fontSize: '13px' }}>Nombre *</label>
+                        <input type="text" value={planForm.nombre} onChange={e => setPlanForm({...planForm, nombre: e.target.value})} style={inp()} placeholder="Ej: Engorde Lote 1" />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', fontSize: '13px' }}>Total animales *</label>
+                        <input type="number" value={planForm.total_animales} onChange={e => setPlanForm({...planForm, total_animales: e.target.value})} style={inp()} placeholder="68" />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', fontSize: '13px' }}>Kg por saco</label>
+                        <input type="number" value={planForm.kg_por_saco} onChange={e => setPlanForm({...planForm, kg_por_saco: e.target.value})} style={inp()} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', fontSize: '13px' }}>Fecha inicio *</label>
+                        <input type="date" value={planForm.fecha_inicio} onChange={e => setPlanForm({...planForm, fecha_inicio: e.target.value})} style={inp()} />
+                      </div>
+                    </div>
+
+                    {/* Etapas manuales */}
+                    <div style={{ marginBottom: '12px', fontWeight: '700', color: '#1a2035' }}>Etapas del plan:</div>
+                    {planEtapas.map((et, i) => (
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 120px 100px 100px 40px', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
+                        <input type="number" value={et.semana} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],semana:parseInt(e.target.value)||0}; setPlanEtapas(arr); }} style={inp()} placeholder="Sem" />
+                        <input type="text" value={et.alimento} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],alimento:e.target.value}; setPlanEtapas(arr); }} style={inp()} placeholder="Alimento" />
+                        <input type="number" step="0.01" value={et.cad_kg_animal} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],cad_kg_animal:parseFloat(e.target.value)||0}; setPlanEtapas(arr); }} style={inp()} placeholder="kg/animal" />
+                        <input type="number" value={et.dias_inicio} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],dias_inicio:parseInt(e.target.value)||0}; setPlanEtapas(arr); }} style={inp()} placeholder="Día ini" />
+                        <input type="number" value={et.dias_fin} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],dias_fin:parseInt(e.target.value)||0}; setPlanEtapas(arr); }} style={inp()} placeholder="Día fin" />
+                        <button className="btn btn-danger btn-sm" onClick={() => setPlanEtapas(planEtapas.filter((_,j)=>j!==i))}><i className="fas fa-times"></i></button>
+                      </div>
+                    ))}
+                    <button className="btn btn-secondary btn-sm" style={{ marginBottom: '16px' }}
+                      onClick={() => setPlanEtapas([...planEtapas, { semana: planEtapas.length+1, alimento: '', cad_kg_animal: 0, dias_inicio: 0, dias_fin: 0 }])}>
+                      <i className="fas fa-plus" style={{ marginRight: '6px' }}></i>Agregar Etapa
+                    </button>
+
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button className="btn btn-success" onClick={handleSavePlan} disabled={planLoading}>
+                        <i className={`fas ${planLoading ? 'fa-spinner fa-spin' : 'fa-save'}`} style={{ marginRight: '8px' }}></i>
+                        {planLoading ? 'Guardando...' : 'Guardar Plan'}
+                      </button>
+                      <button className="btn btn-secondary" onClick={() => { setShowPlanForm(false); setPlanEtapas([]); }}>Cancelar</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* --- Lista de planes --- */}
+              {!selectedPlan && !showPlanForm && !showBulkPlan && (
+                <div>
+                  {plans.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
+                      <i className="fas fa-calendar-alt" style={{ fontSize: '48px', marginBottom: '15px', opacity: 0.4 }}></i>
+                      <h5>No hay planes de alimentación</h5>
+                      <p>Crea un plan manualmente o carga uno desde Excel</p>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                      {plans.map(plan => (
+                        <div key={plan.id} style={{ border: '1px solid #ebedf2', borderRadius: '10px', padding: '18px', background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                            <div style={{ fontWeight: '700', fontSize: '15px', color: '#1a2035' }}>{plan.nombre}</div>
+                            <div style={{ display: 'flex', gap: '5px' }}>
+                              <button className="btn btn-primary btn-sm" title="Ver detalle" onClick={() => loadPlanDetail(plan)}><i className="fas fa-eye"></i></button>
+                              <button className="btn btn-danger btn-sm" title="Eliminar" onClick={() => handleDeletePlan(plan.id, plan.nombre)}><i className="fas fa-trash"></i></button>
+                            </div>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '13px' }}>
+                            <div style={{ background: '#f0f7ff', borderRadius: '6px', padding: '8px', textAlign: 'center' }}>
+                              <div style={{ fontWeight: '700', color: '#1572e8', fontSize: '18px' }}>{plan.total_animales}</div>
+                              <div style={{ color: '#6c757d' }}>Animales</div>
+                            </div>
+                            <div style={{ background: '#f0fff4', borderRadius: '6px', padding: '8px', textAlign: 'center' }}>
+                              <div style={{ fontWeight: '700', color: '#31ce36', fontSize: '18px' }}>{plan.total_dias}</div>
+                              <div style={{ color: '#6c757d' }}>Días totales</div>
+                            </div>
+                            <div style={{ background: '#fffbf0', borderRadius: '6px', padding: '8px', textAlign: 'center' }}>
+                              <div style={{ fontWeight: '700', color: '#ffad46', fontSize: '18px' }}>{plan.total_etapas}</div>
+                              <div style={{ color: '#6c757d' }}>Etapas</div>
+                            </div>
+                            <div style={{ background: '#f8f9fa', borderRadius: '6px', padding: '8px', textAlign: 'center' }}>
+                              <div style={{ fontWeight: '700', color: '#6c757d', fontSize: '14px' }}>{plan.kg_por_saco} kg</div>
+                              <div style={{ color: '#6c757d' }}>Por saco</div>
+                            </div>
+                          </div>
+                          <div style={{ marginTop: '10px', fontSize: '12px', color: '#6c757d' }}>
+                            <i className="fas fa-calendar" style={{ marginRight: '5px' }}></i>
+                            Inicio: {new Date(plan.fecha_inicio).toLocaleDateString()}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* --- Detalle del plan seleccionado --- */}
+              {selectedPlan && (
+                <div>
+                  {planLoading ? (
+                    <div style={{ textAlign: 'center', padding: '40px' }}>
+                      <i className="fas fa-spinner fa-spin" style={{ fontSize: '24px', color: '#1572e8' }}></i>
+                    </div>
+                  ) : planDetail && (
+                    <div>
+                      {/* Header del plan */}
+                      <div style={{ background: 'linear-gradient(135deg, #1572e8, #0d47a1)', borderRadius: '10px', padding: '20px', color: '#fff', marginBottom: '20px' }}>
+                        <h5 style={{ margin: '0 0 10px 0', color: '#fff' }}>{selectedPlan.nombre}</h5>
+                        <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', fontSize: '14px' }}>
+                          <span><i className="fas fa-paw" style={{ marginRight: '6px' }}></i>{selectedPlan.total_animales} animales</span>
+                          <span><i className="fas fa-calendar" style={{ marginRight: '6px' }}></i>Inicio: {new Date(selectedPlan.fecha_inicio).toLocaleDateString()}</span>
+                          <span><i className="fas fa-clock" style={{ marginRight: '6px' }}></i>{selectedPlan.total_dias} días</span>
+                          <span><i className="fas fa-box" style={{ marginRight: '6px' }}></i>{selectedPlan.kg_por_saco} kg/saco</span>
+                        </div>
+                      </div>
+
+                      {/* Sub-tabs */}
+                      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                        <button onClick={() => setPlanDetailTab('resumen')} style={{ padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', background: planDetailTab === 'resumen' ? '#1572e8' : '#f8f9fa', color: planDetailTab === 'resumen' ? '#fff' : '#6c757d' }}>
+                          <i className="fas fa-chart-bar" style={{ marginRight: '6px' }}></i>Resumen por Etapa
+                        </button>
+                        <button onClick={() => setPlanDetailTab('dias')} style={{ padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', background: planDetailTab === 'dias' ? '#1572e8' : '#f8f9fa', color: planDetailTab === 'dias' ? '#fff' : '#6c757d' }}>
+                          <i className="fas fa-list" style={{ marginRight: '6px' }}></i>Proyección Día a Día
+                        </button>
+                      </div>
+
+                      {/* Resumen por etapa */}
+                      {planDetailTab === 'resumen' && (
+                        <div>
+                          {/* Totales globales */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+                            {[{
+                              label: 'Total kg consumidos', val: planDetail.resumenEtapas.reduce((a,e)=>a+e.consumo_total_kg,0).toLocaleString(), color: '#1572e8', icon: 'fa-weight'
+                            },{
+                              label: 'Total sacos', val: planDetail.resumenEtapas.reduce((a,e)=>a+e.sacos_etapa,0).toLocaleString(), color: '#31ce36', icon: 'fa-box'
+                            },{
+                              label: 'Etapas', val: planDetail.resumenEtapas.length, color: '#ffad46', icon: 'fa-layer-group'
+                            },{
+                              label: 'Días totales', val: planDetail.resumenEtapas.reduce((a,e)=>a+e.dias,0), color: '#6c757d', icon: 'fa-calendar'
+                            }].map((kpi,i) => (
+                              <div key={i} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '16px', textAlign: 'center' }}>
+                                <i className={`fas ${kpi.icon}`} style={{ fontSize: '20px', color: kpi.color, marginBottom: '6px' }}></i>
+                                <div style={{ fontSize: '22px', fontWeight: '700', color: kpi.color }}>{kpi.val}</div>
+                                <div style={{ fontSize: '12px', color: '#6c757d', fontWeight: '600' }}>{kpi.label}</div>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="table-responsive">
+                            <table className="table">
+                              <thead>
+                                <tr style={{ background: '#f8f9fa' }}>
+                                  <th>Semana</th><th>Alimento</th><th>CAD kg/animal</th><th>Días</th><th>Consumo total kg</th><th>Sacos etapa</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {planDetail.resumenEtapas.map((e, i) => (
+                                  <tr key={i}>
+                                    <td><span style={{ background: '#1572e8', color: '#fff', borderRadius: '12px', padding: '3px 10px', fontSize: '12px', fontWeight: '700' }}>Sem {e.semana}</span></td>
+                                    <td style={{ fontWeight: '600' }}>{e.alimento}</td>
+                                    <td style={{ color: '#1572e8', fontWeight: '700' }}>{e.cad_kg_animal} kg</td>
+                                    <td>{e.dias}</td>
+                                    <td style={{ fontWeight: '600' }}>{e.consumo_total_kg.toLocaleString()} kg</td>
+                                    <td><span style={{ background: '#31ce36', color: '#fff', borderRadius: '12px', padding: '3px 10px', fontSize: '12px', fontWeight: '700' }}>{e.sacos_etapa} sacos</span></td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Proyección día a día */}
+                      {planDetailTab === 'dias' && (
+                        <div className="table-responsive">
+                          <table className="table" style={{ fontSize: '13px' }}>
+                            <thead>
+                              <tr style={{ background: '#f8f9fa' }}>
+                                <th>Día</th><th>Fecha</th><th>Semana</th><th>Alimento</th><th>CAD kg/animal</th><th>Animales</th><th>Consumo diario total</th><th>Sacos diarios</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {planDetail.dias.map((d, i) => {
+                                const esSabado = new Date(d.fecha).getDay() === 6;
+                                return (
+                                  <tr key={i} style={{ background: esSabado ? '#f0fff4' : undefined }}>
+                                    <td style={{ fontWeight: '700', color: '#1572e8' }}>{d.dia}</td>
+                                    <td>{new Date(d.fecha).toLocaleDateString()}</td>
+                                    <td><span style={{ background: '#ebedf2', borderRadius: '10px', padding: '2px 8px', fontSize: '11px', fontWeight: '600' }}>S{d.semana}</span></td>
+                                    <td style={{ fontSize: '12px' }}>{d.alimento}</td>
+                                    <td style={{ fontWeight: '600' }}>{d.cad_kg_animal}</td>
+                                    <td>{d.total_animales}</td>
+                                    <td style={{ fontWeight: '700', color: '#1572e8' }}>{d.consumo_diario_total} kg</td>
+                                    <td>
+                                      <span style={{ background: '#31ce36', color: '#fff', borderRadius: '10px', padding: '2px 8px', fontSize: '12px', fontWeight: '700' }}>{d.sacos_diarios}</span>
+                                      {esSabado && <span style={{ marginLeft: '6px', fontSize: '11px', color: '#31ce36', fontWeight: '600' }}>← fin semana</span>}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ============ TAB REGISTROS ============ */}
           {activeTab === 'registros' && (
             <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
               <i className="fas fa-clipboard-list" style={{ fontSize: '48px', marginBottom: '15px', opacity: 0.5 }}></i>
