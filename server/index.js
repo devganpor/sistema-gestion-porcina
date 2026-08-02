@@ -70,7 +70,7 @@ app.use(cors(corsOptions));
 
 // Sesión para CSRF
 const sessionConfig = {
-  secret: process.env.SESSION_SECRET || 'session-secret-key',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -97,8 +97,10 @@ app.get('/api/csrf-token', (req, res) => {
   res.json({ csrfToken: req.session.csrfToken });
 });
 
-// Endpoints de administración
-app.post('/api/admin/backup', async (req, res) => {
+const { authenticateToken, requireRole } = require('./middleware/auth');
+
+// Endpoints de administración (protegidos)
+app.post('/api/admin/backup', authenticateToken, requireRole(['administrador']), async (req, res) => {
   try {
     const backupPath = await backupService.createBackup();
     res.json({ message: 'Backup creado exitosamente', path: backupPath });
@@ -107,7 +109,7 @@ app.post('/api/admin/backup', async (req, res) => {
   }
 });
 
-app.get('/api/admin/backups', (req, res) => {
+app.get('/api/admin/backups', authenticateToken, requireRole(['administrador']), (req, res) => {
   try {
     const backups = backupService.getBackupList();
     res.json(backups);
@@ -116,7 +118,7 @@ app.get('/api/admin/backups', (req, res) => {
   }
 });
 
-app.get('/api/admin/audit-logs', (req, res) => {
+app.get('/api/admin/audit-logs', authenticateToken, requireRole(['administrador']), (req, res) => {
   try {
     const filters = {
       userId: req.query.userId,
@@ -160,7 +162,7 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor ejecutándose en puerto ${PORT}`);
   console.log(`Entorno: ${process.env.NODE_ENV || 'development'}`);
   
