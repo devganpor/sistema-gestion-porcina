@@ -1,7 +1,5 @@
 const { AuditLogger } = require('../services/AuditLogger');
 
-const auditLogger = new AuditLogger();
-
 class AppError extends Error {
   constructor(message, statusCode, isOperational = true) {
     super(message);
@@ -12,6 +10,7 @@ class AppError extends Error {
 }
 
 const errorHandler = (err, req, res, next) => {
+  const auditLogger = new AuditLogger();
   
   // Log del error
   auditLogger.log({

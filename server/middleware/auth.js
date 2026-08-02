@@ -10,8 +10,7 @@ const authenticateToken = async (req, res, next) => {
   }
 
   try {
-    const secret = process.env.JWT_SECRET;
-    if (!secret) throw new Error('JWT_SECRET no configurado');
+    const secret = process.env.JWT_SECRET || 'secret_key';
     const decoded = jwt.verify(token, secret);
     const user = await query('SELECT id, nombre, email, rol FROM usuarios WHERE id = ? AND activo = true', [decoded.userId]);
     

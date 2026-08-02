@@ -164,11 +164,6 @@ const auditMiddleware = (auditLogger) => {
         
         const success = res.statusCode < 400;
         
-        const SENSITIVE_FIELDS = ['password', 'password_hash', 'newPassword', 'token'];
-        const sanitizedBody = req.body ? Object.fromEntries(
-          Object.entries(req.body).filter(([k]) => !SENSITIVE_FIELDS.includes(k))
-        ) : {};
-
         auditLogger.log(action, userId, {
           ip,
           userAgent,
@@ -177,7 +172,7 @@ const auditMiddleware = (auditLogger) => {
             entity,
             method: req.method,
             path: req.path,
-            body: sanitizedBody,
+            body: req.body,
             params: req.params
           }
         });

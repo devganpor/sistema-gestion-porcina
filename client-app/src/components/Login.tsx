@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 const Login: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@granja.com');
+  const [password, setPassword] = useState('admin123');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -178,6 +178,33 @@ const Login: React.FC = () => {
             )}
           </button>
         </form>
+
+        {/* Credenciales por defecto */}
+        <div style={{ 
+          marginTop: '30px', 
+          padding: '20px', 
+          background: 'linear-gradient(135deg, rgba(51,65,85,0.5), rgba(71,85,105,0.3))', 
+          borderRadius: '12px',
+          border: '1px solid #475569'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            marginBottom: '12px',
+            color: '#ffffff'
+          }}>
+            <span style={{ fontSize: '20px', marginRight: '8px' }}>💡</span>
+            <strong>Credenciales de Demostración</strong>
+          </div>
+          <div style={{ fontSize: '14px', color: '#cbd5e1', lineHeight: '1.6' }}>
+            <div style={{ marginBottom: '5px' }}>
+              <strong>Email:</strong> admin@granja.com
+            </div>
+            <div>
+              <strong>Contraseña:</strong> admin123
+            </div>
+          </div>
+        </div>
 
         {/* Footer */}
         <div style={{ 

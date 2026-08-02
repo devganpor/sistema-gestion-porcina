@@ -69,7 +69,7 @@ const helmetOptions = {
 
 // Configuración de sesión segura
 const sessionOptions = {
-  secret: process.env.SESSION_SECRET,
+  secret: process.env.SESSION_SECRET || 'session-secret-key-change-in-production',
   resave: false,
   saveUninitialized: false,
   cookie: {

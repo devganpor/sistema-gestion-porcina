@@ -34,7 +34,7 @@ router.post('/', authenticateToken, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 12);
     
     const result = await query(`
-      INSERT INTO usuarios (nombre, email, password_hash, rol)
+      INSERT INTO usuarios (nombre, email, password, rol)
       VALUES (?, ?, ?, ?)
     `, [nombre, email, hashedPassword, rol]);
     
@@ -70,7 +70,7 @@ router.put('/:id/password', authenticateToken, async (req, res) => {
     
     const hashedPassword = await bcrypt.hash(newPassword, 12);
     
-    await query('UPDATE usuarios SET password_hash = ? WHERE id = ?', [hashedPassword, id]);
+    await query('UPDATE usuarios SET password = ? WHERE id = ?', [hashedPassword, id]);
     
     res.json({ message: 'Contraseña actualizada exitosamente' });
   } catch (error) {

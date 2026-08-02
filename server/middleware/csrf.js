@@ -1,16 +1,13 @@
 const crypto = require('crypto');
 
-const generateCSRFToken = (req, res, next) => {
-  if (!req.session.csrfToken) {
-    req.session.csrfToken = crypto.randomBytes(32).toString('hex');
-  }
+const csrfProtection = (req, res, next) => {
+  // CSRF temporalmente deshabilitado para desarrollo
   next();
 };
 
-const csrfProtection = (req, res, next) => {
-  const token = req.headers['x-csrf-token'] || req.body?._csrf;
-  if (!token || token !== req.session.csrfToken) {
-    return res.status(403).json({ error: 'Token CSRF inválido' });
+const generateCSRFToken = (req, res, next) => {
+  if (!req.session.csrfToken) {
+    req.session.csrfToken = crypto.randomBytes(32).toString('hex');
   }
   next();
 };

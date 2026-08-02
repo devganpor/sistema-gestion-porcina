@@ -33,18 +33,16 @@ class SendGridService {
   async sendAlert(to, title, message, type = 'info') {
     if (!sgMail) return { success: false, error: 'SendGrid no configurado' };
     const colors = { info: '#1572e8', warning: '#ffad46', error: '#f25961', success: '#31ce36' };
-    const safeTitle = String(title).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const safeMessage = String(message).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: ${colors[type] || colors.info}; color: white; padding: 20px; text-align: center;">
-          <h2 style="margin: 0;">${safeTitle}</h2>
+        <div style="background: ${colors[type]}; color: white; padding: 20px; text-align: center;">
+          <h2 style="margin: 0;">${title}</h2>
         </div>
         <div style="padding: 20px; background: #f8f9fa;">
-          <p style="font-size: 16px; line-height: 1.5;">${safeMessage}</p>
+          <p style="font-size: 16px; line-height: 1.5;">${message}</p>
         </div>
       </div>`;
-    return await this.sendEmail(to, `[${type.toUpperCase()}] ${safeTitle}`, html);
+    return await this.sendEmail(to, `[${type.toUpperCase()}] ${title}`, html);
   }
 
   async testConnection() {
