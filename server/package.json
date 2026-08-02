@@ -10,6 +10,7 @@
     "migrate:pg": "node scripts/migrate-pg.js",
     "build": "npm run migrate:pg",
     "railway:start": "npm run migrate:pg && npm start",
+    "reset:prod": "node scripts/reset-production.js",
     "test": "jest",
     "lint": "eslint .",
     "security-audit": "npm audit"
