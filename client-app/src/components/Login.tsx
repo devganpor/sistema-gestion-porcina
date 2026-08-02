@@ -191,7 +191,7 @@ const Login: React.FC = () => {
             fontSize: 'clamp(11px, 3vw, 12px)',
             margin: 0
           }}>
-            © 2025 GANPOR - Sistema de Gestión Porcina v1.0
+            © 2025 GANPOR - Sistema de Gestión Porcina v1.1
           </p>
         </div>
       </div>
