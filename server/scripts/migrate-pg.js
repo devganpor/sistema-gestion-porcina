@@ -564,6 +564,25 @@ async function createTables() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_movimientos_animal ON movimientos_ubicacion(animal_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_movimientos_fecha ON movimientos_ubicacion(fecha)`);
 
+    // Distribución de alimentación por animal
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS alimentacion_animal (
+        id SERIAL PRIMARY KEY,
+        registro_alimentacion_id INTEGER REFERENCES registro_alimentacion(id) ON DELETE CASCADE,
+        animal_id INTEGER REFERENCES animales(id) ON DELETE CASCADE,
+        ubicacion_id INTEGER REFERENCES ubicaciones(id),
+        fecha DATE NOT NULL,
+        kg_asignados DECIMAL(8,4) NOT NULL,
+        costo_asignado DECIMAL(10,4) NOT NULL DEFAULT 0,
+        animales_en_ubicacion INTEGER NOT NULL DEFAULT 1,
+        dieta_nombre VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_alimentacion_animal ON alimentacion_animal(animal_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_alimentacion_fecha ON alimentacion_animal(fecha)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_alimentacion_registro ON alimentacion_animal(registro_alimentacion_id)`);
+
     console.log('✅ Datos iniciales insertados');
     console.log('🎉 Migración completada exitosamente');
 

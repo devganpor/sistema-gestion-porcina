@@ -40,6 +40,8 @@ interface Trazabilidad {
     valor_compra: number;
     gastos_directos: number;
     costos_sanitarios: number;
+    costo_alimentacion: number;
+    kg_alimentacion_total: number;
     costo_total: number;
     ingreso_total: number;
     resultado: number;
@@ -963,9 +965,10 @@ const Animals: React.FC = () => {
                         { label: 'Valor Compra/Ingreso', value: resumen.valor_compra, color: '#1572e8' },
                         { label: 'Gastos Directos', value: resumen.gastos_directos, color: '#f25961' },
                         { label: 'Costos Sanitarios', value: resumen.costos_sanitarios, color: '#ffad46' },
+                        { label: `Alimentacion (${resumen.kg_alimentacion_total.toFixed(1)} kg)`, value: resumen.costo_alimentacion, color: '#20c997' },
                         { label: 'COSTO TOTAL', value: resumen.costo_total, color: '#1a2035', bold: true },
                         { label: 'Ingresos por Venta', value: resumen.ingreso_total, color: '#31ce36' },
-                        { label: resumen.resultado >= 0 ? 'GANANCIA' : 'PÉRDIDA', value: Math.abs(resumen.resultado), color: resumen.resultado >= 0 ? '#31ce36' : '#f25961', bold: true }
+                        { label: resumen.resultado >= 0 ? 'GANANCIA' : 'PERDIDA', value: Math.abs(resumen.resultado), color: resumen.resultado >= 0 ? '#31ce36' : '#f25961', bold: true }
                       ].map((item, i) => (
                         <div key={i} style={{ background: 'white', border: `2px solid ${item.color}20`, borderRadius: '8px', padding: '14px', textAlign: 'center' }}>
                           <div style={{ fontSize: '11px', color: '#6c757d', fontWeight: '600', marginBottom: '4px' }}>{item.label}</div>

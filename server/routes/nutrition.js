@@ -125,12 +125,61 @@ router.put('/ingredients/:id/stock', authenticateToken, async (req, res) => {
 router.post('/feeding', authenticateToken, async (req, res) => {
   try {
     const { ubicacion_id, dieta_id, cantidad_kg, fecha_suministro, hora_suministro, observaciones } = req.body;
+
+    // Obtener costo_por_kg de la dieta
+    const dietaRes = await query('SELECT nombre, costo_por_kg FROM dietas WHERE id=$1', [dieta_id]);
+    if (dietaRes.rows.length === 0) return res.status(404).json({ error: 'Dieta no encontrada' });
+    const dieta = dietaRes.rows[0];
+    const costo_por_kg = parseFloat(dieta.costo_por_kg || 0);
+    const costo_total_registro = parseFloat(cantidad_kg) * costo_por_kg;
+
+    // Insertar registro de alimentación
     const result = await query(`
       INSERT INTO registro_alimentacion (ubicacion_id, dieta_id, cantidad_kg, fecha_suministro, hora_suministro, responsable_id, observaciones)
       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id
     `, [ubicacion_id, dieta_id, cantidad_kg, fecha_suministro, hora_suministro || null, req.user.id, observaciones]);
-    res.json({ id: result.rows[0].id, message: 'Alimentación registrada exitosamente' });
+    const registro_id = result.rows[0].id;
+
+    // Obtener animales activos en esa ubicación en esa fecha
+    const animalesRes = await query(
+      `SELECT id FROM animales WHERE ubicacion_actual_id=$1 AND estado='activo'`,
+      [ubicacion_id]
+    );
+    const animales = animalesRes.rows;
+    const n = animales.length;
+
+    if (n > 0) {
+      const kg_por_animal = parseFloat(cantidad_kg) / n;
+      const costo_por_animal = costo_total_registro / n;
+      const client = await require('../config/database-pg').pool.connect();
+      try {
+        await client.query('BEGIN');
+        for (const animal of animales) {
+          await client.query(
+            `INSERT INTO alimentacion_animal
+             (registro_alimentacion_id, animal_id, ubicacion_id, fecha, kg_asignados, costo_asignado, animales_en_ubicacion, dieta_nombre)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [registro_id, animal.id, ubicacion_id, fecha_suministro, kg_por_animal, costo_por_animal, n, dieta.nombre]
+          );
+        }
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error distribuyendo alimentación:', err);
+      } finally {
+        client.release();
+      }
+    }
+
+    res.json({
+      id: registro_id,
+      message: 'Alimentación registrada exitosamente',
+      animales_distribuidos: n,
+      costo_total: costo_total_registro,
+      kg_por_animal: n > 0 ? (parseFloat(cantidad_kg) / n).toFixed(4) : 0
+    });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: 'Error registrando alimentación' });
   }
 });

@@ -262,7 +262,7 @@ router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const [animalRes, gastosRes, eventosRes, vacunasRes, movimientosRes, ingresosRes] = await Promise.all([
+    const [animalRes, gastosRes, eventosRes, vacunasRes, movimientosRes, ingresosRes, alimentacionRes] = await Promise.all([
       query(`
         SELECT a.*, r.nombre as raza_nombre, u.nombre as ubicacion_nombre
         FROM animales a
@@ -293,6 +293,11 @@ router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
       query(`
         SELECT fecha, tipo, descripcion, monto, peso_venta, precio_kg, comprador
         FROM ingresos WHERE animal_id = $1 ORDER BY fecha
+      `, [id]),
+      query(`
+        SELECT fecha, dieta_nombre, kg_asignados, costo_asignado, animales_en_ubicacion,
+               ubicacion_id
+        FROM alimentacion_animal WHERE animal_id = $1 ORDER BY fecha
       `, [id])
     ]);
 
@@ -334,7 +339,7 @@ router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
 
     movimientosRes.rows.forEach(m => timeline.push({
       fecha: m.fecha, tipo: 'movimiento',
-      descripcion: `Traslado: ${m.origen_nombre || '?'} → ${m.destino_nombre || '?'}${m.motivo ? ' (' + m.motivo + ')' : ''}`,
+      descripcion: `Traslado: ${m.origen_nombre || '?'} -> ${m.destino_nombre || '?'}${m.motivo ? ' (' + m.motivo + ')' : ''}`,
       monto: 0, icono: 'fa-exchange-alt', color: '#6c757d',
       costo_acumulado_momento: parseFloat(m.costo_acumulado_momento || 0),
       peso_momento: m.peso_momento
@@ -342,17 +347,34 @@ router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
 
     ingresosRes.rows.forEach(i => timeline.push({
       fecha: i.fecha, tipo: 'ingreso_venta',
-      descripcion: `${i.tipo}${i.descripcion ? ' — ' + i.descripcion : ''}${i.comprador ? ' (Comprador: ' + i.comprador + ')' : ''}${i.peso_venta ? ' | ' + i.peso_venta + ' kg' : ''}`,
+      descripcion: `${i.tipo}${i.descripcion ? ' - ' + i.descripcion : ''}${i.comprador ? ' (Comprador: ' + i.comprador + ')' : ''}${i.peso_venta ? ' | ' + i.peso_venta + ' kg' : ''}`,
       monto: parseFloat(i.monto), icono: 'fa-hand-holding-usd', color: '#31ce36'
+    }));
+
+    // Agrupar alimentacion por fecha para no saturar la linea de tiempo
+    const alimentacionPorFecha = {};
+    alimentacionRes.rows.forEach(a => {
+      const key = a.fecha instanceof Date ? a.fecha.toISOString().split('T')[0] : String(a.fecha).split('T')[0];
+      if (!alimentacionPorFecha[key]) alimentacionPorFecha[key] = { kg: 0, costo: 0, dietas: new Set() };
+      alimentacionPorFecha[key].kg += parseFloat(a.kg_asignados);
+      alimentacionPorFecha[key].costo += parseFloat(a.costo_asignado);
+      if (a.dieta_nombre) alimentacionPorFecha[key].dietas.add(a.dieta_nombre);
+    });
+    Object.entries(alimentacionPorFecha).forEach(([fecha, data]) => timeline.push({
+      fecha, tipo: 'alimentacion',
+      descripcion: `Alimentacion: ${data.kg.toFixed(2)} kg${data.dietas.size > 0 ? ' (' + [...data.dietas].join(', ') + ')' : ''}`,
+      monto: data.costo, icono: 'fa-utensils', color: '#20c997'
     }));
 
     // Ordenar por fecha
     timeline.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
 
     // Calcular totales
+    const costoAlimentacion = alimentacionRes.rows.reduce((s, a) => s + parseFloat(a.costo_asignado), 0);
     const costoTotal = parseFloat(animal.valor_compra || 0)
       + gastosRes.rows.reduce((s, g) => s + parseFloat(g.monto), 0)
-      + eventosRes.rows.reduce((s, e) => s + parseFloat(e.costo), 0);
+      + eventosRes.rows.reduce((s, e) => s + parseFloat(e.costo), 0)
+      + costoAlimentacion;
 
     const ingresoTotal = ingresosRes.rows.reduce((s, i) => s + parseFloat(i.monto), 0);
 
@@ -360,6 +382,8 @@ router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
       valor_compra: parseFloat(animal.valor_compra || 0),
       gastos_directos: gastosRes.rows.reduce((s, g) => s + parseFloat(g.monto), 0),
       costos_sanitarios: eventosRes.rows.reduce((s, e) => s + parseFloat(e.costo), 0),
+      costo_alimentacion: costoAlimentacion,
+      kg_alimentacion_total: alimentacionRes.rows.reduce((s, a) => s + parseFloat(a.kg_asignados), 0),
       costo_total: costoTotal,
       ingreso_total: ingresoTotal,
       resultado: ingresoTotal - costoTotal
@@ -384,12 +408,13 @@ router.post('/:id/movimiento', authenticateToken, async (req, res) => {
 
     const ubicacion_origen_id = animalRes.rows[0].ubicacion_actual_id;
 
-    // Calcular costo acumulado hasta este momento
+    // Calcular costo acumulado hasta este momento (incluye alimentacion)
     const costoRes = await query(`
       SELECT
         COALESCE((SELECT valor_compra FROM animales WHERE id=$1), 0) +
         COALESCE((SELECT SUM(monto) FROM gastos WHERE animal_id=$1), 0) +
-        COALESCE((SELECT SUM(costo) FROM eventos_sanitarios WHERE animal_id=$1 AND costo > 0), 0)
+        COALESCE((SELECT SUM(costo) FROM eventos_sanitarios WHERE animal_id=$1 AND costo > 0), 0) +
+        COALESCE((SELECT SUM(costo_asignado) FROM alimentacion_animal WHERE animal_id=$1), 0)
       AS total
     `, [id]);
     const costo_acumulado = parseFloat(costoRes.rows[0].total || 0);
