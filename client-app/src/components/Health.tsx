@@ -27,6 +27,7 @@ interface Vaccination {
 const Health: React.FC = () => {
   const [healthEvents, setHealthEvents] = useState<HealthEvent[]>([]);
   const [vaccinations, setVaccinations] = useState<Vaccination[]>([]);
+  const [animals, setAnimals] = useState<{id: number; identificador_unico: string; nombre: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('eventos');
   const [showForm, setShowForm] = useState(false);
@@ -105,6 +106,7 @@ const Health: React.FC = () => {
 
   useEffect(() => {
     loadHealthData();
+    api.get('/animals?estado=activo').then(r => setAnimals(r.data)).catch(() => {});
   }, []);
 
   const loadHealthData = async () => {
@@ -280,9 +282,11 @@ const Health: React.FC = () => {
                         }}
                       >
                         <option value="">Seleccionar animal</option>
-                        <option value="1">CER001 - Cerda Principal</option>
-                        <option value="2">LEC001 - Lechón Joven</option>
-                        <option value="3">VER001 - Verraco Alpha</option>
+                        {animals.map(a => (
+                          <option key={a.id} value={a.id}>
+                            {a.identificador_unico}{a.nombre ? ` - ${a.nombre}` : ''}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -640,10 +644,42 @@ const Health: React.FC = () => {
           )}
 
           {activeTab === 'vacunas' && (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
-              <i className="fas fa-syringe" style={{ fontSize: '48px', marginBottom: '15px', opacity: 0.5 }}></i>
-              <h5>Calendario de Vacunaciones</h5>
-              <p>Gestión de protocolos y alertas de vacunación - En desarrollo</p>
+            <div>
+              <div className="table-responsive">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Animal</th>
+                      <th>Vacuna</th>
+                      <th>Fecha Aplicación</th>
+                      <th>Lote</th>
+                      <th>Próxima Dosis</th>
+                      <th>Responsable</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vaccinations.map(v => (
+                      <tr key={v.id}>
+                        <td style={{ fontWeight: '600' }}>{v.animal_identificador}</td>
+                        <td>{v.vacuna}</td>
+                        <td>{new Date(v.fecha_aplicacion).toLocaleDateString()}</td>
+                        <td>{v.lote || '-'}</td>
+                        <td>{v.proxima_dosis ? new Date(v.proxima_dosis).toLocaleDateString() : '-'}</td>
+                        <td>{v.responsable || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {vaccinations.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
+                  <i className="fas fa-syringe" style={{ fontSize: '48px', marginBottom: '15px', opacity: 0.5 }}></i>
+                  <h5>No hay vacunaciones registradas</h5>
+                  <button className="btn btn-primary" onClick={() => { setFormType('vacunacion'); setShowForm(true); }}>
+                    <i className="fas fa-plus" style={{ marginRight: '8px' }}></i>Registrar Vacunación
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

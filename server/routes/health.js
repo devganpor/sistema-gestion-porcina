@@ -53,6 +53,22 @@ router.post('/events', authenticateToken, [
   }
 });
 
+// Listar todos los eventos sanitarios
+router.get('/events', authenticateToken, async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT es.*, a.identificador_unico as animal_identificador
+      FROM eventos_sanitarios es
+      JOIN animales a ON es.animal_id = a.id
+      ORDER BY es.fecha DESC
+      LIMIT 200
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Error obteniendo eventos sanitarios' });
+  }
+});
+
 router.get('/events/animal/:id', authenticateToken, async (req, res) => {
   try {
     const result = await query(
@@ -82,6 +98,22 @@ router.post('/vaccinations', authenticateToken, [
     res.status(201).json({ message: 'Vacunación registrada exitosamente' });
   } catch (error) {
     res.status(500).json({ error: 'Error registrando vacunación' });
+  }
+});
+
+// Listar todas las vacunaciones
+router.get('/vaccinations', authenticateToken, async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT v.*, a.identificador_unico as animal_identificador
+      FROM vacunaciones v
+      JOIN animales a ON v.animal_id = a.id
+      ORDER BY v.fecha_aplicacion DESC
+      LIMIT 200
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Error obteniendo vacunaciones' });
   }
 });
 

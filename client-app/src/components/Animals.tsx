@@ -19,6 +19,8 @@ interface Animal {
 const Animals: React.FC = () => {
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [filteredAnimals, setFilteredAnimals] = useState<Animal[]>([]);
+  const [razas, setRazas] = useState<{id: number; nombre: string}[]>([]);
+  const [ubicaciones, setUbicaciones] = useState<{id: number; nombre: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<'create' | 'edit' | 'view'>('create');
@@ -39,13 +41,15 @@ const Animals: React.FC = () => {
     peso_nacimiento: '',
     observaciones: '',
     raza_id: '',
-    ubicacion_id: '',
+    ubicacion_actual_id: '',
     padre_id: '',
     madre_id: ''
   });
 
   useEffect(() => {
     loadAnimals();
+    api.get('/animals/razas').then(r => setRazas(r.data)).catch(() => {});
+    api.get('/locations').then(r => setUbicaciones(r.data)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -150,7 +154,7 @@ const Animals: React.FC = () => {
         ...formData,
         peso_nacimiento: formData.peso_nacimiento ? parseFloat(formData.peso_nacimiento) : null,
         raza_id: formData.raza_id ? parseInt(formData.raza_id) : null,
-        ubicacion_id: formData.ubicacion_id ? parseInt(formData.ubicacion_id) : null,
+        ubicacion_actual_id: formData.ubicacion_actual_id ? parseInt(formData.ubicacion_actual_id) : null,
         padre_id: formData.padre_id ? parseInt(formData.padre_id) : null,
         madre_id: formData.madre_id ? parseInt(formData.madre_id) : null
       };
@@ -190,7 +194,7 @@ const Animals: React.FC = () => {
       peso_nacimiento: '',
       observaciones: '',
       raza_id: '',
-      ubicacion_id: '',
+      ubicacion_actual_id: '',
       padre_id: '',
       madre_id: ''
     });
@@ -214,7 +218,7 @@ const Animals: React.FC = () => {
       peso_nacimiento: animal.peso_nacimiento?.toString() || '',
       observaciones: animal.observaciones || '',
       raza_id: '',
-      ubicacion_id: '',
+      ubicacion_actual_id: '',
       padre_id: '',
       madre_id: ''
     });
@@ -651,11 +655,8 @@ const Animals: React.FC = () => {
                       value={formData.raza_id}
                       onChange={(value) => setFormData({...formData, raza_id: value})}
                       options={[
-                        { value: '1', label: 'Yorkshire' },
-                        { value: '2', label: 'Landrace' },
-                        { value: '3', label: 'Duroc' },
-                        { value: '4', label: 'Hampshire' },
-                        { value: '5', label: 'Pietrain' }
+                        { value: '', label: 'Sin raza' },
+                        ...razas.map(r => ({ value: r.id.toString(), label: r.nombre }))
                       ]}
                       icon="fa-dna"
                     />
@@ -663,14 +664,11 @@ const Animals: React.FC = () => {
                     <FormField
                       label="Ubicación"
                       type="select"
-                      value={formData.ubicacion_id}
-                      onChange={(value) => setFormData({...formData, ubicacion_id: value})}
+                      value={formData.ubicacion_actual_id}
+                      onChange={(value) => setFormData({...formData, ubicacion_actual_id: value})}
                       options={[
-                        { value: '1', label: 'Corral 1' },
-                        { value: '2', label: 'Corral 2' },
-                        { value: '3', label: 'Galpón A' },
-                        { value: '4', label: 'Galpón B' },
-                        { value: '5', label: 'Maternidad' }
+                        { value: '', label: 'Sin ubicación' },
+                        ...ubicaciones.map(u => ({ value: u.id.toString(), label: u.nombre }))
                       ]}
                       icon="fa-map-marker-alt"
                     />
@@ -683,8 +681,8 @@ const Animals: React.FC = () => {
                       value={formData.padre_id}
                       onChange={(value) => setFormData({...formData, padre_id: value})}
                       options={[
-                        { value: '1', label: 'VER001 - Verraco Alpha' },
-                        { value: '2', label: 'VER002 - Verraco Beta' }
+                        { value: '', label: 'Desconocido' },
+                        ...animals.filter(a => a.sexo === 'macho').map(a => ({ value: a.id.toString(), label: `${a.identificador_unico}${a.nombre ? ' - ' + a.nombre : ''}` }))
                       ]}
                       icon="fa-mars"
                     />
@@ -695,8 +693,8 @@ const Animals: React.FC = () => {
                       value={formData.madre_id}
                       onChange={(value) => setFormData({...formData, madre_id: value})}
                       options={[
-                        { value: '1', label: 'CER001 - Cerda Principal' },
-                        { value: '2', label: 'CER002 - Cerda Joven' }
+                        { value: '', label: 'Desconocida' },
+                        ...animals.filter(a => a.sexo === 'hembra').map(a => ({ value: a.id.toString(), label: `${a.identificador_unico}${a.nombre ? ' - ' + a.nombre : ''}` }))
                       ]}
                       icon="fa-venus"
                     />

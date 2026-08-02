@@ -7,6 +7,22 @@ const { csrfProtection } = require('../middleware/csrf');
 
 const router = express.Router();
 
+// Listar todos los pesajes
+router.get('/', authenticateToken, async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT p.*, a.identificador_unico as animal_identificador
+      FROM pesajes p
+      JOIN animales a ON p.animal_id = a.id
+      ORDER BY p.fecha_pesaje DESC
+      LIMIT 500
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Error obteniendo pesajes' });
+  }
+});
+
 router.get('/animal/:id', authenticateToken, async (req, res) => {
   try {
     const result = await query(`

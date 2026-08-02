@@ -23,6 +23,7 @@ interface GrowthStats {
 const Weights: React.FC = () => {
   const [weights, setWeights] = useState<WeightRecord[]>([]);
   const [filteredWeights, setFilteredWeights] = useState<WeightRecord[]>([]);
+  const [animals, setAnimals] = useState<{id: number; identificador_unico: string; nombre: string}[]>([]);
   const [stats, setStats] = useState<GrowthStats>({
     totalPesajes: 0,
     pesoPromedio: 0,
@@ -43,15 +44,13 @@ const Weights: React.FC = () => {
   const [formData, setFormData] = useState({
     animal_id: '',
     peso: '',
-    fecha: new Date().toISOString().split('T')[0],
-    observaciones: '',
-    condicion_corporal: '3',
-    temperatura: '',
-    ubicacion_pesaje: 'bascula_principal'
+    fecha_pesaje: new Date().toISOString().split('T')[0],
+    observaciones: ''
   });
 
   useEffect(() => {
     loadWeights();
+    api.get('/animals?estado=activo').then(r => setAnimals(r.data)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -108,75 +107,16 @@ const Weights: React.FC = () => {
 
   const validateForm = (): boolean => {
     const newErrors: {[key: string]: string} = {};
-    
-    // Validar animal
-    if (!formData.animal_id || formData.animal_id === '') {
-      newErrors.animal_id = 'Debe seleccionar un animal';
-    }
-    
-    // Validar peso
-    if (!formData.peso || formData.peso === '') {
+    if (!formData.animal_id) newErrors.animal_id = 'Debe seleccionar un animal';
+    if (!formData.peso) {
       newErrors.peso = 'El peso es requerido';
     } else {
       const peso = parseFloat(formData.peso);
-      if (isNaN(peso) || peso <= 0) {
-        newErrors.peso = 'El peso debe ser un número mayor a 0';
-      } else {
-        // Validaciones más específicas por rango de peso
-        if (peso > 400) {
-          newErrors.peso = 'El peso parece demasiado alto (máximo 400kg)';
-        } else if (peso < 0.3) {
-          newErrors.peso = 'El peso parece demasiado bajo (mínimo 0.3kg)';
-        }
-        // Validación de rangos normales
-        if (peso > 200 && peso <= 400) {
-          // Rango válido para reproductores adultos
-        } else if (peso > 80 && peso <= 200) {
-          // Rango válido para animales de engorde
-        } else if (peso >= 15 && peso <= 80) {
-          // Rango válido para lechones y desarrollo
-        } else if (peso < 15) {
-          // Solo advertencia para pesos muy bajos
-          console.log('Peso bajo detectado, pero válido para lechones recién nacidos');
-        }
-      }
+      if (isNaN(peso) || peso <= 0) newErrors.peso = 'El peso debe ser mayor a 0';
+      else if (peso > 400) newErrors.peso = 'El peso máximo es 400kg';
     }
-    
-    // Validar fecha
-    if (!formData.fecha) {
-      newErrors.fecha = 'La fecha es requerida';
-    } else {
-      const fecha = new Date(formData.fecha);
-      const hoy = new Date();
-      if (fecha > hoy) {
-        newErrors.fecha = 'La fecha no puede ser futura';
-      }
-      
-      // Verificar que no sea demasiado antigua
-      const unAnoAtras = new Date();
-      unAnoAtras.setFullYear(unAnoAtras.getFullYear() - 1);
-      if (fecha < unAnoAtras) {
-        newErrors.fecha = 'La fecha parece demasiado antigua';
-      }
-    }
-    
-    // Validar temperatura si se proporciona
-    if (formData.temperatura) {
-      const temp = parseFloat(formData.temperatura);
-      if (isNaN(temp)) {
-        newErrors.temperatura = 'La temperatura debe ser un número';
-      } else if (temp < 35 || temp > 42) {
-        newErrors.temperatura = 'La temperatura debe estar entre 35°C y 42°C';
-      }
-    }
-    
-    // Validar condición corporal
-    const condicion = parseInt(formData.condicion_corporal);
-    if (isNaN(condicion) || condicion < 1 || condicion > 5) {
-      newErrors.condicion_corporal = 'La condición corporal debe estar entre 1 y 5';
-    }
-    
-    console.log('Errores de validación:', newErrors);
+    if (!formData.fecha_pesaje) newErrors.fecha_pesaje = 'La fecha es requerida';
+    else if (new Date(formData.fecha_pesaje) > new Date()) newErrors.fecha_pesaje = 'La fecha no puede ser futura';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -196,11 +136,8 @@ const Weights: React.FC = () => {
       const submitData = {
         animal_id: parseInt(formData.animal_id),
         peso: parseFloat(formData.peso),
-        fecha: formData.fecha,
-        observaciones: formData.observaciones || null,
-        condicion_corporal: parseInt(formData.condicion_corporal),
-        temperatura: formData.temperatura ? parseFloat(formData.temperatura) : null,
-        ubicacion_pesaje: formData.ubicacion_pesaje
+        fecha_pesaje: formData.fecha_pesaje,
+        observaciones: formData.observaciones || null
       };
       
       if (modalType === 'create') {
@@ -234,11 +171,8 @@ const Weights: React.FC = () => {
     setFormData({
       animal_id: '',
       peso: '',
-      fecha: new Date().toISOString().split('T')[0],
-      observaciones: '',
-      condicion_corporal: '3',
-      temperatura: '',
-      ubicacion_pesaje: 'bascula_principal'
+      fecha_pesaje: new Date().toISOString().split('T')[0],
+      observaciones: ''
     });
     setErrors({});
     setSelectedWeight(null);
@@ -254,11 +188,8 @@ const Weights: React.FC = () => {
     setFormData({
       animal_id: weight.animal_id.toString(),
       peso: weight.peso.toString(),
-      fecha: weight.fecha.split('T')[0],
-      observaciones: weight.observaciones || '',
-      condicion_corporal: '3',
-      temperatura: '',
-      ubicacion_pesaje: 'bascula_principal'
+      fecha_pesaje: weight.fecha.split('T')[0],
+      observaciones: weight.observaciones || ''
     });
     setSelectedWeight(weight);
     setModalType('edit');
@@ -611,10 +542,8 @@ const Weights: React.FC = () => {
                       error={errors.animal_id}
                       required
                       options={[
-                        { value: '1', label: 'CER001 - Cerda Principal' },
-                        { value: '2', label: 'LEC001 - Lechón Joven' },
-                        { value: '3', label: 'ENG001 - Cerdo Engorde' },
-                        { value: '4', label: 'VER001 - Verraco Alpha' }
+                        { value: '', label: 'Seleccionar animal' },
+                        ...animals.map(a => ({ value: a.id.toString(), label: `${a.identificador_unico}${a.nombre ? ' - ' + a.nombre : ''}` }))
                       ]}
                       icon="fa-paw"
                     />
@@ -622,74 +551,32 @@ const Weights: React.FC = () => {
                     <FormField
                       label="Fecha"
                       type="date"
-                      value={formData.fecha}
-                      onChange={(value) => setFormData({...formData, fecha: value})}
-                      error={errors.fecha}
+                      value={formData.fecha_pesaje}
+                      onChange={(value) => setFormData({...formData, fecha_pesaje: value})}
+                      error={errors.fecha_pesaje}
                       required
                       icon="fa-calendar"
                     />
                   </div>
                   
-                  <div className="grid grid-2">
-                    <FormField
-                      label="Peso (kg)"
-                      type="number"
-                      step="0.1"
-                      value={formData.peso}
-                      onChange={(value) => setFormData({...formData, peso: value})}
-                      error={errors.peso}
-                      required
-                      placeholder="45.5"
-                      icon="fa-weight"
-                    />
-                    
-                    <FormField
-                      label="Condición Corporal (1-5)"
-                      type="select"
-                      value={formData.condicion_corporal}
-                      onChange={(value) => setFormData({...formData, condicion_corporal: value})}
-                      options={[
-                        { value: '1', label: '1 - Muy flaco' },
-                        { value: '2', label: '2 - Flaco' },
-                        { value: '3', label: '3 - Normal' },
-                        { value: '4', label: '4 - Gordo' },
-                        { value: '5', label: '5 - Muy gordo' }
-                      ]}
-                      icon="fa-eye"
-                    />
-                  </div>
-                  
-                  <div className="grid grid-2">
-                    <FormField
-                      label="Temperatura (°C)"
-                      type="number"
-                      step="0.1"
-                      value={formData.temperatura}
-                      onChange={(value) => setFormData({...formData, temperatura: value})}
-                      placeholder="38.5"
-                      icon="fa-thermometer-half"
-                    />
-                    
-                    <FormField
-                      label="Ubicación de Pesaje"
-                      type="select"
-                      value={formData.ubicacion_pesaje}
-                      onChange={(value) => setFormData({...formData, ubicacion_pesaje: value})}
-                      options={[
-                        { value: 'bascula_principal', label: 'Báscula Principal' },
-                        { value: 'bascula_portatil', label: 'Báscula Portátil' },
-                        { value: 'bascula_corral', label: 'Báscula de Corral' }
-                      ]}
-                      icon="fa-map-marker-alt"
-                    />
-                  </div>
+                  <FormField
+                    label="Peso (kg)"
+                    type="number"
+                    step="0.1"
+                    value={formData.peso}
+                    onChange={(value) => setFormData({...formData, peso: value})}
+                    error={errors.peso}
+                    required
+                    placeholder="45.5"
+                    icon="fa-weight"
+                  />
                   
                   <FormField
                     label="Observaciones"
                     type="textarea"
                     value={formData.observaciones}
                     onChange={(value) => setFormData({...formData, observaciones: value})}
-                    placeholder="Observaciones del pesaje, comportamiento del animal, etc..."
+                    placeholder="Observaciones del pesaje..."
                     rows={3}
                   />
                   
