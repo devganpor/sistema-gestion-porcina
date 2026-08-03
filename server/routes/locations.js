@@ -22,7 +22,7 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-const TIPO_NOMBRE: Record<string, string> = {
+const TIPO_NOMBRE = {
   granja:      'Granja',
   galpon:      'Galpón',
   corral:      'Corral',
