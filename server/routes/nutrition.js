@@ -324,7 +324,12 @@ router.get('/plans/:id', authenticateToken, async (req, res) => {
   try {
     const [planRes, etapasRes] = await Promise.all([
       query('SELECT * FROM planes_alimentacion WHERE id=$1', [req.params.id]),
-      query('SELECT * FROM plan_etapas WHERE plan_id=$1 ORDER BY semana', [req.params.id])
+      query(`
+        SELECT pe.*, d.nombre as dieta_nombre, d.costo_por_kg as dieta_costo_kg
+        FROM plan_etapas pe
+        LEFT JOIN dietas d ON pe.dieta_id = d.id
+        WHERE pe.plan_id=$1 ORDER BY pe.semana
+      `, [req.params.id])
     ]);
     if (planRes.rows.length === 0) return res.status(404).json({ error: 'Plan no encontrado' });
     const plan = planRes.rows[0];
@@ -399,9 +404,9 @@ router.post('/plans', authenticateToken, async (req, res) => {
     const planId = planRes.rows[0].id;
     for (const e of etapas) {
       await client.query(
-        `INSERT INTO plan_etapas (plan_id, semana, alimento, cad_kg_animal, fecha_inicio, fecha_fin)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [planId, e.semana, e.alimento || null, e.cad_kg_animal, e.fecha_inicio, e.fecha_fin]
+        `INSERT INTO plan_etapas (plan_id, semana, alimento, dieta_id, cad_kg_animal, fecha_inicio, fecha_fin)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [planId, e.semana, e.alimento || null, e.dieta_id || null, e.cad_kg_animal, e.fecha_inicio, e.fecha_fin]
       );
     }
     await client.query('COMMIT');
@@ -430,8 +435,8 @@ router.put('/plans/:id', authenticateToken, async (req, res) => {
     await client.query('DELETE FROM plan_etapas WHERE plan_id=$1', [req.params.id]);
     for (const e of etapas) {
       await client.query(
-        `INSERT INTO plan_etapas (plan_id, semana, alimento, cad_kg_animal, fecha_inicio, fecha_fin) VALUES ($1,$2,$3,$4,$5,$6)`,
-        [req.params.id, e.semana, e.alimento || null, e.cad_kg_animal, e.fecha_inicio, e.fecha_fin]
+        `INSERT INTO plan_etapas (plan_id, semana, alimento, dieta_id, cad_kg_animal, fecha_inicio, fecha_fin) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [req.params.id, e.semana, e.alimento || null, e.dieta_id || null, e.cad_kg_animal, e.fecha_inicio, e.fecha_fin]
       );
     }
     await client.query('COMMIT');

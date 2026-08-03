@@ -15,6 +15,8 @@ interface Diet {
 interface Etapa {
   semana: number;
   alimento: string;
+  dieta_id?: number | null;
+  dieta_nombre?: string;
   cad_kg_animal: number;
   fecha_inicio: string;
   fecha_fin: string;
@@ -238,6 +240,8 @@ const NutritionComplete: React.FC = () => {
       setPlanEtapas(res.data.etapas.map((e: any) => ({
         semana: e.semana,
         alimento: e.alimento || '',
+        dieta_id: e.dieta_id || null,
+        dieta_nombre: e.dieta_nombre || '',
         cad_kg_animal: parseFloat(e.cad_kg_animal),
         fecha_inicio: e.fecha_inicio.split('T')[0],
         fecha_fin: e.fecha_fin.split('T')[0]
@@ -690,9 +694,23 @@ const NutritionComplete: React.FC = () => {
                     {/* Etapas manuales */}
                     <div style={{ marginBottom: '12px', fontWeight: '700', color: '#1a2035' }}>Etapas del plan:</div>
                     {planEtapas.map((et, i) => (
-                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 120px 140px 140px 40px', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 1fr 110px 130px 130px 36px', gap: '6px', marginBottom: '8px', alignItems: 'center' }}>
                         <input type="number" value={et.semana} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],semana:parseInt(e.target.value)||0}; setPlanEtapas(arr); }} style={inp()} placeholder="Sem" />
-                        <input type="text" value={et.alimento} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],alimento:e.target.value}; setPlanEtapas(arr); }} style={inp()} placeholder="Alimento" />
+                        <select
+                          value={et.dieta_id || ''}
+                          onChange={e => {
+                            const id = e.target.value ? parseInt(e.target.value) : null;
+                            const dieta = diets.find(d => d.id === id);
+                            const arr = [...planEtapas];
+                            arr[i] = { ...arr[i], dieta_id: id, alimento: dieta ? dieta.nombre : arr[i].alimento };
+                            setPlanEtapas(arr);
+                          }}
+                          style={inp()}
+                        >
+                          <option value="">— Sin dieta —</option>
+                          {diets.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+                        </select>
+                        <input type="text" value={et.alimento} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],alimento:e.target.value}; setPlanEtapas(arr); }} style={inp()} placeholder="Nombre alimento" />
                         <input type="number" step="0.01" value={et.cad_kg_animal} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],cad_kg_animal:parseFloat(e.target.value)||0}; setPlanEtapas(arr); }} style={inp()} placeholder="kg/animal" />
                         <input type="date" value={et.fecha_inicio} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],fecha_inicio:e.target.value}; setPlanEtapas(arr); }} style={inp()} />
                         <input type="date" value={et.fecha_fin} onChange={e => { const arr=[...planEtapas]; arr[i]={...arr[i],fecha_fin:e.target.value}; setPlanEtapas(arr); }} style={inp()} />
@@ -700,7 +718,7 @@ const NutritionComplete: React.FC = () => {
                       </div>
                     ))}
                     <button className="btn btn-secondary btn-sm" style={{ marginBottom: '16px' }}
-                      onClick={() => setPlanEtapas([...planEtapas, { semana: planEtapas.length+1, alimento: '', cad_kg_animal: 0, fecha_inicio: '', fecha_fin: '' }])}>
+                      onClick={() => setPlanEtapas([...planEtapas, { semana: planEtapas.length+1, alimento: '', dieta_id: null, cad_kg_animal: 0, fecha_inicio: '', fecha_fin: '' }])}>
                       <i className="fas fa-plus" style={{ marginRight: '6px' }}></i>Agregar Etapa
                     </button>
 
@@ -827,7 +845,14 @@ const NutritionComplete: React.FC = () => {
                                 {planDetail.resumenEtapas.map((e, i) => (
                                   <tr key={i}>
                                     <td><span style={{ background: '#1572e8', color: '#fff', borderRadius: '12px', padding: '3px 10px', fontSize: '12px', fontWeight: '700' }}>Sem {e.semana}</span></td>
-                                    <td style={{ fontWeight: '600' }}>{e.alimento}</td>
+                                    <td style={{ fontWeight: '600' }}>
+                                      {e.alimento}
+                                      {(e as any).dieta_nombre && (
+                                        <span style={{ marginLeft: '6px', background: '#e8f4fd', color: '#1572e8', borderRadius: '10px', padding: '2px 8px', fontSize: '11px', fontWeight: '600' }}>
+                                          <i className="fas fa-link" style={{ marginRight: '4px' }}></i>{(e as any).dieta_nombre}
+                                        </span>
+                                      )}
+                                    </td>
                                     <td style={{ color: '#1572e8', fontWeight: '700' }}>{e.cad_kg_animal} kg</td>
                                     <td>{parseDate(e.fecha_inicio).toLocaleDateString()}</td>
                                     <td>{parseDate(e.fecha_fin).toLocaleDateString()}</td>

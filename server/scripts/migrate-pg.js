@@ -515,10 +515,18 @@ async function createTables() {
         plan_id INTEGER REFERENCES planes_alimentacion(id) ON DELETE CASCADE,
         semana INTEGER NOT NULL,
         alimento VARCHAR(100),
+        dieta_id INTEGER REFERENCES dietas(id) ON DELETE SET NULL,
         cad_kg_animal DECIMAL(6,3) NOT NULL,
         fecha_inicio DATE NOT NULL,
         fecha_fin DATE NOT NULL
       )
+    `);
+    // Agregar dieta_id a plan_etapas si no existe
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='plan_etapas' AND column_name='dieta_id')
+        THEN ALTER TABLE plan_etapas ADD COLUMN dieta_id INTEGER REFERENCES dietas(id) ON DELETE SET NULL; END IF;
+      END $$;
     `);
     // Migrar dias_inicio/dias_fin -> fecha_inicio/fecha_fin si existe la version antigua
     await client.query(`
