@@ -94,34 +94,39 @@ async function createTables() {
         THEN ALTER TABLE ubicaciones ADD COLUMN secuencia INTEGER; END IF;
       END $$;
     `);
-    // Asignar secuencia a ubicaciones existentes que no la tienen,
-    // extrayendo el número del nombre (ej: "Corral 10" -> 10), si no tiene número usa el id
+    // Reasignar secuencias correctamente: independiente por tipo, ordenado por numero en nombre
+    // Se ejecuta siempre para corregir secuencias mal asignadas en deploys anteriores
     await client.query(`
-      UPDATE ubicaciones
-      SET secuencia = (
-        CASE
-          WHEN nombre ~ '[0-9]+'
-          THEN (regexp_match(nombre, '[0-9]+'))[1]::integer
-          ELSE id
-        END
-      )
-      WHERE secuencia IS NULL;
+      UPDATE ubicaciones u
+      SET secuencia = sub.rn
+      FROM (
+        SELECT id,
+               ROW_NUMBER() OVER (
+                 PARTITION BY tipo
+                 ORDER BY
+                   CASE WHEN nombre ~ '[0-9]+'
+                        THEN (regexp_match(nombre, '[0-9]+'))[1]::integer
+                        ELSE id
+                   END
+               ) as rn
+        FROM ubicaciones
+      ) sub
+      WHERE u.id = sub.id;
     `);
-    // Renombrar ubicaciones existentes al formato estandar (ej: "Corral 0001")
+    // Renombrar al formato estandar solo las que tienen patron antiguo "Tipo Numero"
     await client.query(`
       UPDATE ubicaciones
       SET nombre = (
         CASE tipo
           WHEN 'granja'      THEN 'Granja '
-          WHEN 'galpon'      THEN 'Galpón '
+          WHEN 'galpon'      THEN 'Galp\u00f3n '
           WHEN 'corral'      THEN 'Corral '
           WHEN 'maternidad'  THEN 'Maternidad '
           WHEN 'aislamiento' THEN 'Aislamiento '
           ELSE initcap(tipo) || ' '
         END || lpad(secuencia::text, 4, '0')
       )
-      WHERE secuencia IS NOT NULL
-        AND nombre ~ '^(Granja|Galp.n|Corral|Maternidad|Aislamiento) [0-9]+$';
+      WHERE nombre ~ '^(Granja|Galp.n|Corral|Maternidad|Aislamiento) [0-9]+$';
     `);
 
     await client.query(`
