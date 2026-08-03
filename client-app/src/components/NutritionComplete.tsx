@@ -108,6 +108,7 @@ const NutritionComplete: React.FC = () => {
   const [planForm, setPlanForm] = useState(emptyPlanForm);
   const [planEtapas, setPlanEtapas] = useState<Etapa[]>([]);
   const [planLoading, setPlanLoading] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
 
   // --- Carga masiva de plan ---
   const planFileRef = useRef<HTMLInputElement>(null);
@@ -212,24 +213,55 @@ const NutritionComplete: React.FC = () => {
     } catch { alert('Error eliminando plan'); }
   };
 
+  const handleEditPlan = async (plan: Plan) => {
+    setPlanLoading(true);
+    try {
+      const res = await api.get(`/nutrition/plans/${plan.id}`);
+      setPlanForm({
+        nombre: plan.nombre,
+        descripcion: plan.descripcion || '',
+        total_animales: plan.total_animales.toString(),
+        kg_por_saco: plan.kg_por_saco.toString(),
+        fecha_inicio: plan.fecha_inicio.split('T')[0]
+      });
+      setPlanEtapas(res.data.etapas.map((e: any) => ({
+        semana: e.semana,
+        alimento: e.alimento || '',
+        cad_kg_animal: parseFloat(e.cad_kg_animal),
+        fecha_inicio: e.fecha_inicio.split('T')[0],
+        fecha_fin: e.fecha_fin.split('T')[0]
+      })));
+      setEditingPlanId(plan.id);
+      setShowPlanForm(true);
+      setShowBulkPlan(false);
+    } catch { alert('Error cargando plan'); }
+    finally { setPlanLoading(false); }
+  };
+
   const handleSavePlan = async () => {
     if (!planForm.nombre || !planForm.total_animales || !planForm.fecha_inicio || planEtapas.length === 0) {
       alert('Completa nombre, total animales, fecha inicio y al menos una etapa'); return;
     }
     setPlanLoading(true);
+    const payload = {
+      nombre: planForm.nombre,
+      descripcion: planForm.descripcion || null,
+      total_animales: parseInt(planForm.total_animales),
+      kg_por_saco: parseFloat(planForm.kg_por_saco) || 40,
+      fecha_inicio: planForm.fecha_inicio,
+      etapas: planEtapas
+    };
     try {
-      await api.post('/nutrition/plans', {
-        nombre: planForm.nombre,
-        descripcion: planForm.descripcion || null,
-        total_animales: parseInt(planForm.total_animales),
-        kg_por_saco: parseFloat(planForm.kg_por_saco) || 40,
-        fecha_inicio: planForm.fecha_inicio,
-        etapas: planEtapas
-      });
-      setSuccess('Plan creado exitosamente');
+      if (editingPlanId) {
+        await api.put(`/nutrition/plans/${editingPlanId}`, payload);
+        setSuccess('Plan actualizado exitosamente');
+      } else {
+        await api.post('/nutrition/plans', payload);
+        setSuccess('Plan creado exitosamente');
+      }
       setShowPlanForm(false); setShowBulkPlan(false);
       setPlanForm(emptyPlanForm); setPlanEtapas([]);
-      setBulkEtapas([]);
+      setEditingPlanId(null); setBulkEtapas([]);
       loadData();
       setTimeout(() => setSuccess(''), 3000);
     } catch { alert('Error guardando plan'); }
@@ -341,10 +373,10 @@ const NutritionComplete: React.FC = () => {
               )}
               {activeTab === 'planes' && !selectedPlan && (
                 <>
-                  <button className="btn btn-success" onClick={() => { setShowBulkPlan(true); setShowPlanForm(false); }}>
+                  <button className="btn btn-success" onClick={() => { setShowBulkPlan(true); setShowPlanForm(false); setEditingPlanId(null); }}>
                     <i className="fas fa-file-excel" style={{ marginRight: '8px' }}></i>Cargar Excel
                   </button>
-                  <button className="btn btn-primary" onClick={() => { setShowPlanForm(true); setShowBulkPlan(false); setPlanEtapas([]); setPlanForm(emptyPlanForm); }}>
+                  <button className="btn btn-primary" onClick={() => { setShowPlanForm(true); setShowBulkPlan(false); setPlanEtapas([]); setPlanForm(emptyPlanForm); setEditingPlanId(null); }}>
                     <i className="fas fa-plus" style={{ marginRight: '8px' }}></i>Nuevo Plan
                   </button>
                 </>
@@ -619,7 +651,10 @@ const NutritionComplete: React.FC = () => {
               {showPlanForm && !selectedPlan && (
                 <div className="card" style={{ marginBottom: '20px' }}>
                   <div className="card-header">
-                    <h5 className="card-title"><i className="fas fa-plus" style={{ marginRight: '8px' }}></i>Nuevo Plan Manual</h5>
+                    <h5 className="card-title">
+                      <i className={`fas ${editingPlanId ? 'fa-edit' : 'fa-plus'}`} style={{ marginRight: '8px' }}></i>
+                      {editingPlanId ? 'Editar Plan' : 'Nuevo Plan Manual'}
+                    </h5>
                   </div>
                   <div style={{ padding: '20px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '16px' }}>
@@ -663,7 +698,7 @@ const NutritionComplete: React.FC = () => {
                         <i className={`fas ${planLoading ? 'fa-spinner fa-spin' : 'fa-save'}`} style={{ marginRight: '8px' }}></i>
                         {planLoading ? 'Guardando...' : 'Guardar Plan'}
                       </button>
-                      <button className="btn btn-secondary" onClick={() => { setShowPlanForm(false); setPlanEtapas([]); }}>Cancelar</button>
+                      <button className="btn btn-secondary" onClick={() => { setShowPlanForm(false); setPlanEtapas([]); setEditingPlanId(null); }}>Cancelar</button>
                     </div>
                   </div>
                 </div>
@@ -686,6 +721,7 @@ const NutritionComplete: React.FC = () => {
                             <div style={{ fontWeight: '700', fontSize: '15px', color: '#1a2035' }}>{plan.nombre}</div>
                             <div style={{ display: 'flex', gap: '5px' }}>
                               <button className="btn btn-primary btn-sm" title="Ver detalle" onClick={() => loadPlanDetail(plan)}><i className="fas fa-eye"></i></button>
+                              <button className="btn btn-warning btn-sm" title="Editar" onClick={() => handleEditPlan(plan)}><i className="fas fa-edit"></i></button>
                               <button className="btn btn-danger btn-sm" title="Eliminar" onClick={() => handleDeletePlan(plan.id, plan.nombre)}><i className="fas fa-trash"></i></button>
                             </div>
                           </div>

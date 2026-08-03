@@ -414,6 +414,36 @@ router.post('/plans', authenticateToken, async (req, res) => {
   }
 });
 
+// Editar plan
+router.put('/plans/:id', authenticateToken, async (req, res) => {
+  const { nombre, descripcion, total_animales, kg_por_saco, fecha_inicio, etapas } = req.body;
+  if (!nombre || !total_animales || !fecha_inicio || !Array.isArray(etapas) || etapas.length === 0)
+    return res.status(400).json({ error: 'Faltan campos requeridos' });
+
+  const client = await require('../config/database-pg').pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE planes_alimentacion SET nombre=$1, descripcion=$2, total_animales=$3, kg_por_saco=$4, fecha_inicio=$5 WHERE id=$6`,
+      [nombre, descripcion || null, total_animales, kg_por_saco || 40, fecha_inicio, req.params.id]
+    );
+    await client.query('DELETE FROM plan_etapas WHERE plan_id=$1', [req.params.id]);
+    for (const e of etapas) {
+      await client.query(
+        `INSERT INTO plan_etapas (plan_id, semana, alimento, cad_kg_animal, fecha_inicio, fecha_fin) VALUES ($1,$2,$3,$4,$5,$6)`,
+        [req.params.id, e.semana, e.alimento || null, e.cad_kg_animal, e.fecha_inicio, e.fecha_fin]
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ message: 'Plan actualizado exitosamente' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Error actualizando plan' });
+  } finally {
+    client.release();
+  }
+});
+
 // Eliminar plan
 router.delete('/plans/:id', authenticateToken, async (req, res) => {
   try {
