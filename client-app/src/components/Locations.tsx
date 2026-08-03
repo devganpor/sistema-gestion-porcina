@@ -18,6 +18,9 @@ interface Animal {
   categoria: string;
 }
 
+const fmtSeq = (n: number | null, fallback: number) =>
+  String(n ?? fallback).padStart(4, '0');
+
 const TIPOS = ['granja', 'galpon', 'corral', 'maternidad', 'aislamiento'];
 
 const TIPO_LABELS: Record<string, string> = {
@@ -303,7 +306,7 @@ const Locations: React.FC = () => {
                   <option value="">Seleccionar ubicación</option>
                   {ubicaciones.map(u => (
                     <option key={u.id} value={u.id}>
-                      {u.secuencia ? `#${u.secuencia} ` : ''}{u.nombre} ({u.tipo}) — {u.animales_actuales}/{u.capacidad_maxima || '∞'}
+                      {u.secuencia ? `#${fmtSeq(u.secuencia, 0)} ` : ''}{u.nombre} ({u.tipo}) — {u.animales_actuales}/{u.capacidad_maxima || '∞'}
                     </option>
                   ))}
                 </select>
@@ -358,19 +361,21 @@ const Locations: React.FC = () => {
                       {/* Número de secuencia */}
                       {tipo === 'corral' && (
                         <span style={{
-                          minWidth: 28,
-                          height: 28,
-                          borderRadius: '50%',
+                          minWidth: 36,
+                          height: 24,
+                          borderRadius: 4,
                           background: '#1572e8',
                           color: '#fff',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: 700,
                           flexShrink: 0,
+                          letterSpacing: 1,
+                          fontFamily: 'monospace',
                         }}>
-                          {u.secuencia ?? idx + 1}
+                          {fmtSeq(u.secuencia, idx + 1)}
                         </span>
                       )}
 

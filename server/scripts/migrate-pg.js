@@ -94,6 +94,19 @@ async function createTables() {
         THEN ALTER TABLE ubicaciones ADD COLUMN secuencia INTEGER; END IF;
       END $$;
     `);
+    // Asignar secuencia a ubicaciones existentes que no la tienen,
+    // extrayendo el número del nombre (ej: "Corral 10" -> 10), si no tiene número usa el id
+    await client.query(`
+      UPDATE ubicaciones
+      SET secuencia = (
+        CASE
+          WHEN nombre ~ '[0-9]+'
+          THEN (regexp_match(nombre, '[0-9]+'))[1]::integer
+          ELSE id
+        END
+      )
+      WHERE secuencia IS NULL;
+    `);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS animales (
