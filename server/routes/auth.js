@@ -22,15 +22,13 @@ router.post('/login', [
     
     console.log('Intento de login:', email);
     
-    const user = await query('SELECT * FROM usuarios WHERE email = ? AND activo = true', [email]);
-    console.log('Usuario encontrado:', user.rows.length > 0);
+    const user = await query('SELECT * FROM usuarios WHERE email = $1 AND activo = true', [email]);
     
     if (user.rows.length === 0) {
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
     const validPassword = await bcrypt.compare(password, user.rows[0].password_hash);
-    console.log('Password válida:', validPassword);
     
     if (!validPassword) {
       return res.status(401).json({ error: 'Credenciales inválidas' });

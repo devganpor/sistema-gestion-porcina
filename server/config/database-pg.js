@@ -12,15 +12,16 @@ const convertPlaceholders = (sql) => {
 };
 
 const query = async (sql, params = []) => {
+  const pgSql = convertPlaceholders(sql);
+  const client = await pool.connect();
   try {
-    const pgSql = convertPlaceholders(sql);
-    const client = await pool.connect();
     const result = await client.query(pgSql, params);
-    client.release();
     return { rows: result.rows };
   } catch (error) {
     console.error('Database query error:', error.message);
     throw error;
+  } finally {
+    client.release();
   }
 };
 

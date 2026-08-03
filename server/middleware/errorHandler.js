@@ -11,19 +11,19 @@ class AppError extends Error {
 
 const errorHandler = (err, req, res, next) => {
   const auditLogger = new AuditLogger();
-  
-  // Log del error
+
   auditLogger.log({
-    userId: req.user?.id || 'anonymous',
-    action: 'ERROR',
-    resource: req.path,
-    details: {
-      message: err.message,
-      stack: err.stack,
-      statusCode: err.statusCode
-    },
-    ip: req.ip,
-    userAgent: req.get('User-Agent')
+    usuario_id:     req.user?.id || null,
+    usuario_email:  req.user?.email || null,
+    usuario_nombre: req.user?.nombre || null,
+    accion:         'ERROR',
+    modulo:         'Sistema',
+    descripcion:    err.message,
+    ruta:           req.path,
+    metodo:         req.method,
+    ip:             req.ip,
+    user_agent:     req.get('User-Agent'),
+    exitoso:        false
   });
 
   // Errores operacionales conocidos
@@ -34,7 +34,22 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
-  // Errores de base de datos SQLite
+  // Errores de constraint PostgreSQL
+  if (err.code === '23505') {
+    return res.status(400).json({
+      error: 'El registro ya existe',
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  if (err.code === '23503') {
+    return res.status(400).json({
+      error: 'Referencia inválida a otro registro',
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  // Errores de constraint SQLite (compatibilidad local)
   if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
     return res.status(400).json({
       error: 'El registro ya existe',
@@ -49,9 +64,8 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
-  // Error genérico para producción
   const isDevelopment = process.env.NODE_ENV === 'development';
-  
+
   res.status(500).json({
     error: 'Error interno del servidor',
     timestamp: new Date().toISOString(),

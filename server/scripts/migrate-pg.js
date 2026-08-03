@@ -558,6 +558,22 @@ async function createTables() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_alimentacion_fecha ON alimentacion_animal(fecha)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_alimentacion_registro ON alimentacion_animal(registro_alimentacion_id)`);
 
+    // === ÍNDICES GENÉTICOS ===
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS indices_geneticos (
+        id SERIAL PRIMARY KEY,
+        animal_id INTEGER REFERENCES animales(id) ON DELETE CASCADE,
+        fertilidad DECIMAL(5,2) DEFAULT 0,
+        habilidad_materna DECIMAL(5,2) DEFAULT 0,
+        conversion_alimenticia DECIMAL(5,2) DEFAULT 0,
+        ganancia_diaria DECIMAL(5,2) DEFAULT 0,
+        indice_seleccion DECIMAL(5,2) DEFAULT 0,
+        fecha_calculo DATE NOT NULL DEFAULT CURRENT_DATE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_indices_animal ON indices_geneticos(animal_id)`);
+
     // === TABLA DE AUDIT LOGS EN BASE DE DATOS ===
     await client.query(`
       CREATE TABLE IF NOT EXISTS audit_logs (

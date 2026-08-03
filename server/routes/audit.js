@@ -24,7 +24,8 @@ router.get('/', authenticateToken, requireRole(['administrador']), async (req, r
     if (fecha_fin)    { params.push(fecha_fin + ' 23:59:59'); conditions.push(`al.created_at <= $${params.length}`); }
     if (buscar) {
       params.push(`%${buscar}%`);
-      conditions.push(`(al.descripcion ILIKE $${params.length} OR al.usuario_email ILIKE $${params.length} OR al.usuario_nombre ILIKE $${params.length} OR al.ruta ILIKE $${params.length})`);
+      const idx = params.length;
+      conditions.push(`(al.descripcion ILIKE $${idx} OR al.usuario_email ILIKE $${idx} OR al.usuario_nombre ILIKE $${idx} OR al.ruta ILIKE $${idx})`);
     }
 
     const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
