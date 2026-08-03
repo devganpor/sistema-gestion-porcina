@@ -157,6 +157,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor ejecutándose en puerto ${PORT}`);
   console.log(`Entorno: ${process.env.NODE_ENV || 'development'}`);
   
-  // Iniciar backup automático
-  backupService.scheduleAutoBackup();
+  // Backup automático solo en desarrollo (Railway usa PostgreSQL, no SQLite)
+  if (!process.env.DATABASE_URL) {
+    backupService.scheduleAutoBackup();
+  }
 });

@@ -14,7 +14,7 @@ router.get('/', authenticateToken, async (req, res) => {
       FROM ubicaciones u
       LEFT JOIN animales a ON u.id = a.ubicacion_actual_id AND a.estado = 'activo'
       GROUP BY u.id
-      ORDER BY u.tipo, u.nombre
+      ORDER BY u.nombre
     `);
     res.json(result.rows);
   } catch (error) {
