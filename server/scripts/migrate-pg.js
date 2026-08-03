@@ -87,6 +87,13 @@ async function createTables() {
         THEN ALTER TABLE ubicaciones ADD COLUMN tipo VARCHAR(50); END IF;
       END $$;
     `);
+    // Agregar columna 'secuencia' para orden de corrales
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ubicaciones' AND column_name='secuencia')
+        THEN ALTER TABLE ubicaciones ADD COLUMN secuencia INTEGER; END IF;
+      END $$;
+    `);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS animales (

@@ -7,8 +7,8 @@ interface Ubicacion {
   tipo: string;
   capacidad_maxima: number;
   animales_actuales: number;
-  ubicacion_padre_nombre: string;
-  estado: string;
+  secuencia: number | null;
+  descripcion: string;
 }
 
 interface Animal {
@@ -18,29 +18,47 @@ interface Animal {
   categoria: string;
 }
 
+const TIPOS = ['granja', 'galpon', 'corral', 'maternidad', 'aislamiento'];
+
+const TIPO_LABELS: Record<string, string> = {
+  granja: '🏢 Granjas',
+  galpon: '🏠 Galpones',
+  corral: '🚪 Corrales',
+  maternidad: '🐣 Maternidad',
+  aislamiento: '🔒 Aislamiento',
+};
+
 const Locations: React.FC = () => {
   const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([]);
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [showMoveForm, setShowMoveForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [selectedAnimal, setSelectedAnimal] = useState('');
   const [formData, setFormData] = useState({
     nombre: '',
     tipo: 'corral',
     capacidad_maxima: '',
-    descripcion: ''
+    descripcion: '',
+    secuencia: '',
   });
   const [moveData, setMoveData] = useState({
     animal_id: '',
     nueva_ubicacion_id: '',
-    motivo: ''
+    motivo: '',
   });
+  const [loadingSeq, setLoadingSeq] = useState(false);
 
   useEffect(() => {
     loadUbicaciones();
     loadAnimals();
   }, []);
+
+  // Cuando se abre el form de creación, cargar la secuencia sugerida
+  useEffect(() => {
+    if (showForm && !editingId) {
+      fetchNextSequence(formData.tipo);
+    }
+  }, [showForm, editingId]); // eslint-disable-line
 
   const loadUbicaciones = async () => {
     try {
@@ -60,59 +78,72 @@ const Locations: React.FC = () => {
     }
   };
 
+  const fetchNextSequence = async (tipo: string) => {
+    setLoadingSeq(true);
+    try {
+      const res = await api.get(`/locations/next-sequence?tipo=${tipo}`);
+      setFormData(prev => ({ ...prev, secuencia: String(res.data.siguiente) }));
+    } catch {
+      // silencioso
+    } finally {
+      setLoadingSeq(false);
+    }
+  };
+
+  const handleTipoChange = (tipo: string) => {
+    setFormData(prev => ({ ...prev, tipo }));
+    if (!editingId) fetchNextSequence(tipo);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const data = {
-        ...formData,
-        capacidad_maxima: formData.capacidad_maxima ? parseInt(formData.capacidad_maxima) : null
+        nombre: formData.nombre,
+        tipo: formData.tipo,
+        capacidad_maxima: formData.capacidad_maxima ? parseInt(formData.capacidad_maxima) : null,
+        descripcion: formData.descripcion || null,
+        secuencia: formData.secuencia ? parseInt(formData.secuencia) : null,
       };
-      
+
       if (editingId) {
         await api.put(`/locations/${editingId}`, data);
       } else {
         await api.post('/locations', data);
       }
-      
+
       resetForm();
       loadUbicaciones();
-    } catch (error) {
-      console.error('Error guardando ubicación:', error);
-      alert('Error guardando ubicación');
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Error guardando ubicación');
     }
   };
 
   const resetForm = () => {
     setShowForm(false);
     setEditingId(null);
-    setFormData({
-      nombre: '',
-      tipo: 'corral',
-      capacidad_maxima: '',
-      descripcion: ''
-    });
+    setFormData({ nombre: '', tipo: 'corral', capacidad_maxima: '', descripcion: '', secuencia: '' });
   };
 
-  const handleEdit = (ubicacion: Ubicacion) => {
+  const handleEdit = (u: Ubicacion) => {
     setFormData({
-      nombre: ubicacion.nombre,
-      tipo: ubicacion.tipo,
-      capacidad_maxima: ubicacion.capacidad_maxima?.toString() || '',
-      descripcion: ''
+      nombre: u.nombre,
+      tipo: u.tipo || 'corral',
+      capacidad_maxima: u.capacidad_maxima?.toString() || '',
+      descripcion: u.descripcion || '',
+      secuencia: u.secuencia?.toString() || '',
     });
-    setEditingId(ubicacion.id);
+    setEditingId(u.id);
     setShowForm(true);
   };
 
   const handleDelete = async (id: number) => {
-    if (window.confirm('¿Estás seguro de eliminar esta ubicación?')) {
-      try {
-        await api.delete(`/locations/${id}`);
-        loadUbicaciones();
-      } catch (error) {
-        console.error('Error eliminando ubicación:', error);
-        alert('Error eliminando ubicación');
-      }
+    if (!window.confirm('¿Estás seguro de eliminar esta ubicación?')) return;
+    try {
+      await api.delete(`/locations/${id}`);
+      loadUbicaciones();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Error eliminando ubicación');
     }
   };
 
@@ -122,16 +153,11 @@ const Locations: React.FC = () => {
       await api.post('/locations/move-animal', {
         animal_id: parseInt(moveData.animal_id),
         nueva_ubicacion_id: parseInt(moveData.nueva_ubicacion_id),
-        motivo: moveData.motivo
+        motivo: moveData.motivo,
       });
       setShowMoveForm(false);
-      setMoveData({
-        animal_id: '',
-        nueva_ubicacion_id: '',
-        motivo: ''
-      });
+      setMoveData({ animal_id: '', nueva_ubicacion_id: '', motivo: '' });
       loadUbicaciones();
-      alert('Animal movido exitosamente');
     } catch (error: any) {
       alert(error.response?.data?.error || 'Error moviendo animal');
     }
@@ -139,40 +165,30 @@ const Locations: React.FC = () => {
 
   const getOcupacionColor = (ocupacion: number, capacidad: number) => {
     if (!capacidad) return '#95a5a6';
-    const porcentaje = (ocupacion / capacidad) * 100;
-    if (porcentaje >= 90) return '#e74c3c';
-    if (porcentaje >= 70) return '#f39c12';
+    const pct = (ocupacion / capacidad) * 100;
+    if (pct >= 90) return '#e74c3c';
+    if (pct >= 70) return '#f39c12';
     return '#27ae60';
   };
 
-  const granjas = ubicaciones.filter(u => u.tipo === 'granja');
-  const galpones = ubicaciones.filter(u => u.tipo === 'galpon');
-  const corrales = ubicaciones.filter(u => u.tipo === 'corral');
-  const maternidades = ubicaciones.filter(u => u.tipo === 'maternidad');
-  const aislamientos = ubicaciones.filter(u => u.tipo === 'aislamiento');
+  const byTipo = (tipo: string) =>
+    ubicaciones.filter(u => u.tipo === tipo);
 
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h1>Gestión de Ubicaciones</h1>
-        <div>
-          <button 
-            className="btn btn-success"
-            onClick={() => setShowMoveForm(!showMoveForm)}
-            style={{ marginRight: '10px' }}
-          >
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button className="btn btn-success" onClick={() => setShowMoveForm(!showMoveForm)}>
             {showMoveForm ? 'Cancelar' : 'Mover Animal'}
           </button>
-          <button 
-            className="btn btn-primary"
-            onClick={() => setShowForm(!showForm)}
-          >
+          <button className="btn btn-primary" onClick={() => { resetForm(); setShowForm(!showForm); }}>
             {showForm ? 'Cancelar' : 'Nueva Ubicación'}
           </button>
         </div>
       </div>
 
-      {/* Formulario Nueva Ubicación */}
+      {/* Formulario Nueva / Editar Ubicación */}
       {showForm && (
         <div className="card mb-3">
           <h3>{editingId ? '✏️ Editar Ubicación' : '➕ Crear Nueva Ubicación'}</h3>
@@ -184,7 +200,7 @@ const Locations: React.FC = () => {
                   type="text"
                   className="form-control"
                   value={formData.nombre}
-                  onChange={(e) => setFormData({...formData, nombre: e.target.value})}
+                  onChange={e => setFormData({ ...formData, nombre: e.target.value })}
                   required
                 />
               </div>
@@ -193,7 +209,7 @@ const Locations: React.FC = () => {
                 <select
                   className="form-control"
                   value={formData.tipo}
-                  onChange={(e) => setFormData({...formData, tipo: e.target.value})}
+                  onChange={e => handleTipoChange(e.target.value)}
                 >
                   <option value="granja">Granja</option>
                   <option value="galpon">Galpón</option>
@@ -208,16 +224,36 @@ const Locations: React.FC = () => {
                   type="number"
                   className="form-control"
                   value={formData.capacidad_maxima}
-                  onChange={(e) => setFormData({...formData, capacidad_maxima: e.target.value})}
+                  onChange={e => setFormData({ ...formData, capacidad_maxima: e.target.value })}
+                  min="1"
                 />
               </div>
               <div className="form-group">
+                <label>
+                  Secuencia / Orden:
+                  {loadingSeq && <span style={{ marginLeft: 8, fontSize: 12, color: '#888' }}>calculando...</span>}
+                </label>
+                <input
+                  type="number"
+                  className="form-control"
+                  value={formData.secuencia}
+                  onChange={e => setFormData({ ...formData, secuencia: e.target.value })}
+                  min="1"
+                  placeholder="Auto-asignado"
+                />
+                {!editingId && (
+                  <small style={{ color: '#888' }}>
+                    Se asigna automáticamente. Puedes cambiarlo para reordenar.
+                  </small>
+                )}
+              </div>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                 <label>Descripción:</label>
                 <input
                   type="text"
                   className="form-control"
                   value={formData.descripcion}
-                  onChange={(e) => setFormData({...formData, descripcion: e.target.value})}
+                  onChange={e => setFormData({ ...formData, descripcion: e.target.value })}
                   placeholder="Descripción opcional"
                 />
               </div>
@@ -245,13 +281,13 @@ const Locations: React.FC = () => {
                 <select
                   className="form-control"
                   value={moveData.animal_id}
-                  onChange={(e) => setMoveData({...moveData, animal_id: e.target.value})}
+                  onChange={e => setMoveData({ ...moveData, animal_id: e.target.value })}
                   required
                 >
                   <option value="">Seleccionar animal</option>
-                  {animals.map(animal => (
-                    <option key={animal.id} value={animal.id}>
-                      {animal.identificador_unico} - {animal.nombre || 'Sin nombre'}
+                  {animals.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.identificador_unico} - {a.nombre || 'Sin nombre'}
                     </option>
                   ))}
                 </select>
@@ -261,13 +297,13 @@ const Locations: React.FC = () => {
                 <select
                   className="form-control"
                   value={moveData.nueva_ubicacion_id}
-                  onChange={(e) => setMoveData({...moveData, nueva_ubicacion_id: e.target.value})}
+                  onChange={e => setMoveData({ ...moveData, nueva_ubicacion_id: e.target.value })}
                   required
                 >
                   <option value="">Seleccionar ubicación</option>
-                  {ubicaciones.map(ubicacion => (
-                    <option key={ubicacion.id} value={ubicacion.id}>
-                      {ubicacion.nombre} ({ubicacion.tipo}) — {ubicacion.animales_actuales}/{ubicacion.capacidad_maxima || '∞'}
+                  {ubicaciones.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.secuencia ? `#${u.secuencia} ` : ''}{u.nombre} ({u.tipo}) — {u.animales_actuales}/{u.capacidad_maxima || '∞'}
                     </option>
                   ))}
                 </select>
@@ -278,7 +314,7 @@ const Locations: React.FC = () => {
                   type="text"
                   className="form-control"
                   value={moveData.motivo}
-                  onChange={(e) => setMoveData({...moveData, motivo: e.target.value})}
+                  onChange={e => setMoveData({ ...moveData, motivo: e.target.value })}
                   placeholder="Ej: Cambio de etapa"
                 />
               </div>
@@ -288,156 +324,101 @@ const Locations: React.FC = () => {
         </div>
       )}
 
-      {/* Lista de Ubicaciones */}
+      {/* Lista por tipo */}
       <div className="grid grid-3">
-        {/* Granjas */}
-        {granjas.length > 0 && <div className="card">
-          <h3>🏢 Granjas ({granjas.length})</h3>
-          {granjas.map(ubicacion => (
-            <div key={ubicacion.id} style={{
-              padding: '12px',
-              margin: '8px 0',
-              backgroundColor: '#f8f9fa',
-              border: '1px solid #dee2e6',
-              borderRadius: '4px'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>{ubicacion.nombre}</div>
-                  <div style={{ fontSize: '14px', color: '#666' }}>
-                    Animales: {ubicacion.animales_actuales}
-                    {ubicacion.capacidad_maxima && ` / ${ubicacion.capacidad_maxima}`}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '5px' }}>
-                  <button 
-                    className="btn btn-warning btn-sm"
-                    onClick={() => handleEdit(ubicacion)}
-                    title="Editar"
-                  >
-                    ✏️
-                  </button>
-                  <button 
-                    className="btn btn-danger btn-sm"
-                    onClick={() => handleDelete(ubicacion.id)}
-                    title="Eliminar"
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>}
+        {TIPOS.map(tipo => {
+          const lista = byTipo(tipo);
+          if (tipo !== 'corral' && lista.length === 0) return null;
+          return (
+            <div key={tipo} className="card">
+              <h3>
+                {TIPO_LABELS[tipo]} ({lista.length})
+              </h3>
+              <div style={{ maxHeight: tipo === 'corral' ? '450px' : undefined, overflowY: tipo === 'corral' ? 'auto' : undefined }}>
+                {lista.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
+                    No hay {tipo}s registrados
+                  </p>
+                ) : (
+                  lista.map((u, idx) => (
+                    <div
+                      key={u.id}
+                      style={{
+                        padding: '10px 12px',
+                        margin: '6px 0',
+                        backgroundColor: tipo === 'aislamiento' ? '#fff3cd' : '#f8f9fa',
+                        border: `1px solid ${tipo === 'aislamiento' ? '#ffeaa7' : '#dee2e6'}`,
+                        borderRadius: '6px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '8px',
+                      }}
+                    >
+                      {/* Número de secuencia */}
+                      {tipo === 'corral' && (
+                        <span style={{
+                          minWidth: 28,
+                          height: 28,
+                          borderRadius: '50%',
+                          background: '#1572e8',
+                          color: '#fff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}>
+                          {u.secuencia ?? idx + 1}
+                        </span>
+                      )}
 
-        {/* Galpones */}
-        {galpones.length > 0 && <div className="card">
-          <h3>🏠 Galpones ({galpones.length})</h3>
-          {galpones.map(ubicacion => (
-            <div key={ubicacion.id} style={{
-              padding: '12px',
-              margin: '8px 0',
-              backgroundColor: '#f8f9fa',
-              border: '1px solid #dee2e6',
-              borderRadius: '4px'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>{ubicacion.nombre}</div>
-                  <div style={{ fontSize: '14px', color: '#666' }}>
-                    Animales: {ubicacion.animales_actuales}
-                    {ubicacion.capacidad_maxima && ` / ${ubicacion.capacidad_maxima}`}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '5px' }}>
-                  <button className="btn btn-warning btn-sm" onClick={() => handleEdit(ubicacion)} title="Editar">✏️</button>
-                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(ubicacion.id)} title="Eliminar">🗑️</button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>}
+                      {/* Info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {u.nombre}
+                        </div>
+                        {u.capacidad_maxima ? (
+                          <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                            {u.animales_actuales}/{u.capacidad_maxima} animales
+                            {' · '}
+                            {Math.round((u.animales_actuales / u.capacidad_maxima) * 100)}%
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                            {u.animales_actuales} animales
+                          </div>
+                        )}
+                      </div>
 
-        {/* Corrales */}
-        <div className="card">
-          <h3>🚪 Corrales ({corrales.length})</h3>
-          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-            {corrales.map(ubicacion => (
-              <div key={ubicacion.id} style={{
-                padding: '12px',
-                margin: '8px 0',
-                backgroundColor: '#f8f9fa',
-                border: '1px solid #dee2e6',
-                borderRadius: '4px'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
-                  <span style={{ fontWeight: 'bold' }}>{ubicacion.nombre}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <span style={{
-                      padding: '2px 8px',
-                      borderRadius: '12px',
-                      fontSize: '12px',
-                      backgroundColor: getOcupacionColor(ubicacion.animales_actuales, ubicacion.capacidad_maxima),
-                      color: 'white'
-                    }}>
-                      {ubicacion.animales_actuales}/{ubicacion.capacidad_maxima || '∞'}
-                    </span>
-                    <button className="btn btn-warning btn-sm" onClick={() => handleEdit(ubicacion)} title="Editar">✏️</button>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(ubicacion.id)} title="Eliminar">🗑️</button>
-                  </div>
-                </div>
-                {ubicacion.capacidad_maxima && (
-                  <div style={{ fontSize: '12px', color: '#666' }}>
-                    Ocupación: {Math.round((ubicacion.animales_actuales / ubicacion.capacidad_maxima) * 100)}%
-                  </div>
+                      {/* Badge ocupación */}
+                      {u.capacidad_maxima > 0 && (
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: 12,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          backgroundColor: getOcupacionColor(u.animales_actuales, u.capacidad_maxima),
+                          color: '#fff',
+                          flexShrink: 0,
+                        }}>
+                          {u.animales_actuales}/{u.capacidad_maxima}
+                        </span>
+                      )}
+
+                      {/* Acciones */}
+                      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                        <button className="btn btn-warning btn-sm" onClick={() => handleEdit(u)} title="Editar">✏️</button>
+                        <button className="btn btn-danger btn-sm" onClick={() => handleDelete(u.id)} title="Eliminar">🗑️</button>
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
-            ))}
-          </div>
-          {corrales.length === 0 && (
-            <p style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
-              No hay corrales registrados
-            </p>
-          )}
-        </div>
-
-        {/* Maternidades */}
-        {maternidades.length > 0 && <div className="card">
-          <h3>🐣 Maternidad ({maternidades.length})</h3>
-          {maternidades.map(ubicacion => (
-            <div key={ubicacion.id} style={{ padding: '12px', margin: '8px 0', backgroundColor: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '4px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>{ubicacion.nombre}</div>
-                  <div style={{ fontSize: '14px', color: '#666' }}>Animales: {ubicacion.animales_actuales}{ubicacion.capacidad_maxima && ` / ${ubicacion.capacidad_maxima}`}</div>
-                </div>
-                <div style={{ display: 'flex', gap: '5px' }}>
-                  <button className="btn btn-warning btn-sm" onClick={() => handleEdit(ubicacion)} title="Editar">✏️</button>
-                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(ubicacion.id)} title="Eliminar">🗑️</button>
-                </div>
-              </div>
             </div>
-          ))}
-        </div>}
-
-        {/* Aislamientos */}
-        {aislamientos.length > 0 && <div className="card">
-          <h3>🔒 Aislamiento ({aislamientos.length})</h3>
-          {aislamientos.map(ubicacion => (
-            <div key={ubicacion.id} style={{ padding: '12px', margin: '8px 0', backgroundColor: '#fff3cd', border: '1px solid #ffeaa7', borderRadius: '4px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>{ubicacion.nombre}</div>
-                  <div style={{ fontSize: '14px', color: '#666' }}>Animales: {ubicacion.animales_actuales}{ubicacion.capacidad_maxima && ` / ${ubicacion.capacidad_maxima}`}</div>
-                </div>
-                <div style={{ display: 'flex', gap: '5px' }}>
-                  <button className="btn btn-warning btn-sm" onClick={() => handleEdit(ubicacion)} title="Editar">✏️</button>
-                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(ubicacion.id)} title="Eliminar">🗑️</button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>}
+          );
+        })}
       </div>
     </div>
   );

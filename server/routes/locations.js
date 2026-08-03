@@ -14,11 +14,25 @@ router.get('/', authenticateToken, async (req, res) => {
       FROM ubicaciones u
       LEFT JOIN animales a ON u.id = a.ubicacion_actual_id AND a.estado = 'activo'
       GROUP BY u.id
-      ORDER BY u.nombre
+      ORDER BY u.tipo, COALESCE(u.secuencia, 99999), u.nombre
     `);
     res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: 'Error obteniendo ubicaciones' });
+  }
+});
+
+// GET /next-sequence?tipo=corral — devuelve el siguiente número de secuencia
+router.get('/next-sequence', authenticateToken, async (req, res) => {
+  try {
+    const { tipo = 'corral' } = req.query;
+    const result = await query(
+      `SELECT COALESCE(MAX(secuencia), 0) + 1 as siguiente FROM ubicaciones WHERE tipo = $1`,
+      [tipo]
+    );
+    res.json({ siguiente: result.rows[0].siguiente });
+  } catch (error) {
+    res.status(500).json({ error: 'Error obteniendo secuencia' });
   }
 });
 
@@ -30,11 +44,19 @@ router.post('/', authenticateToken, csrfProtection, [
   if (!errors.isEmpty()) throw new AppError('Datos inválidos', 400);
 
   const { nombre, tipo, capacidad_maxima, descripcion } = req.body;
-  const result = await query(
-    'INSERT INTO ubicaciones (nombre, tipo, capacidad_maxima, descripcion) VALUES ($1,$2,$3,$4) RETURNING id',
-    [nombre, tipo, capacidad_maxima, descripcion]
+
+  // Calcular secuencia automática para el tipo
+  const seqRes = await query(
+    `SELECT COALESCE(MAX(secuencia), 0) + 1 as siguiente FROM ubicaciones WHERE tipo = $1`,
+    [tipo]
   );
-  res.status(201).json({ message: 'Ubicación creada exitosamente', id: result.rows[0].id });
+  const secuencia = seqRes.rows[0].siguiente;
+
+  const result = await query(
+    'INSERT INTO ubicaciones (nombre, tipo, capacidad_maxima, descripcion, secuencia) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+    [nombre, tipo, capacidad_maxima || null, descripcion || null, secuencia]
+  );
+  res.status(201).json({ message: 'Ubicación creada exitosamente', id: result.rows[0].id, secuencia });
 }));
 
 router.post('/move-animal', authenticateToken, [
@@ -93,10 +115,10 @@ router.get('/occupancy', authenticateToken, async (req, res) => {
 
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { nombre, tipo, capacidad_maxima, descripcion } = req.body;
+    const { nombre, tipo, capacidad_maxima, descripcion, secuencia } = req.body;
     await query(
-      'UPDATE ubicaciones SET nombre=$1, tipo=$2, capacidad_maxima=$3, descripcion=$4 WHERE id=$5',
-      [nombre, tipo, capacidad_maxima, descripcion, req.params.id]
+      'UPDATE ubicaciones SET nombre=$1, tipo=$2, capacidad_maxima=$3, descripcion=$4, secuencia=$5 WHERE id=$6',
+      [nombre, tipo, capacidad_maxima || null, descripcion || null, secuencia || null, req.params.id]
     );
     res.json({ message: 'Ubicación actualizada exitosamente' });
   } catch (error) {
