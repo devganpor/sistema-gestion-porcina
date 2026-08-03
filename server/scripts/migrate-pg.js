@@ -107,6 +107,22 @@ async function createTables() {
       )
       WHERE secuencia IS NULL;
     `);
+    // Renombrar ubicaciones existentes al formato estandar (ej: "Corral 0001")
+    await client.query(`
+      UPDATE ubicaciones
+      SET nombre = (
+        CASE tipo
+          WHEN 'granja'      THEN 'Granja '
+          WHEN 'galpon'      THEN 'Galpón '
+          WHEN 'corral'      THEN 'Corral '
+          WHEN 'maternidad'  THEN 'Maternidad '
+          WHEN 'aislamiento' THEN 'Aislamiento '
+          ELSE initcap(tipo) || ' '
+        END || lpad(secuencia::text, 4, '0')
+      )
+      WHERE secuencia IS NOT NULL
+        AND nombre ~ '^(Granja|Galp.n|Corral|Maternidad|Aislamiento) [0-9]+$';
+    `);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS animales (

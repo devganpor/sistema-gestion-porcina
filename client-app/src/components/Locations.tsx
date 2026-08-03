@@ -21,6 +21,14 @@ interface Animal {
 const fmtSeq = (n: number | null, fallback: number) =>
   String(n ?? fallback).padStart(4, '0');
 
+const TIPO_NOMBRE: Record<string, string> = {
+  granja:      'Granja',
+  galpon:      'Galpón',
+  corral:      'Corral',
+  maternidad:  'Maternidad',
+  aislamiento: 'Aislamiento',
+};
+
 const TIPOS = ['granja', 'galpon', 'corral', 'maternidad', 'aislamiento'];
 
 const TIPO_LABELS: Record<string, string> = {
@@ -38,11 +46,11 @@ const Locations: React.FC = () => {
   const [showMoveForm, setShowMoveForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
-    nombre: '',
     tipo: 'corral',
     capacidad_maxima: '',
     descripcion: '',
     secuencia: '',
+    nombre_sugerido: '',
   });
   const [moveData, setMoveData] = useState({
     animal_id: '',
@@ -85,7 +93,11 @@ const Locations: React.FC = () => {
     setLoadingSeq(true);
     try {
       const res = await api.get(`/locations/next-sequence?tipo=${tipo}`);
-      setFormData(prev => ({ ...prev, secuencia: String(res.data.siguiente) }));
+      setFormData(prev => ({
+        ...prev,
+        secuencia: String(res.data.siguiente),
+        nombre_sugerido: res.data.nombre_sugerido,
+      }));
     } catch {
       // silencioso
     } finally {
@@ -101,20 +113,20 @@ const Locations: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const data = {
-        nombre: formData.nombre,
+      const data: any = {
         tipo: formData.tipo,
         capacidad_maxima: formData.capacidad_maxima ? parseInt(formData.capacidad_maxima) : null,
         descripcion: formData.descripcion || null,
-        secuencia: formData.secuencia ? parseInt(formData.secuencia) : null,
       };
-
       if (editingId) {
+        // Al editar sí se puede cambiar el nombre manualmente
+        data.nombre = formData.nombre_sugerido;
+        data.secuencia = formData.secuencia ? parseInt(formData.secuencia) : null;
         await api.put(`/locations/${editingId}`, data);
       } else {
+        // Al crear, el nombre lo genera el servidor
         await api.post('/locations', data);
       }
-
       resetForm();
       loadUbicaciones();
     } catch (error: any) {
@@ -125,16 +137,16 @@ const Locations: React.FC = () => {
   const resetForm = () => {
     setShowForm(false);
     setEditingId(null);
-    setFormData({ nombre: '', tipo: 'corral', capacidad_maxima: '', descripcion: '', secuencia: '' });
+    setFormData({ tipo: 'corral', capacidad_maxima: '', descripcion: '', secuencia: '', nombre_sugerido: '' });
   };
 
   const handleEdit = (u: Ubicacion) => {
     setFormData({
-      nombre: u.nombre,
       tipo: u.tipo || 'corral',
       capacidad_maxima: u.capacidad_maxima?.toString() || '',
       descripcion: u.descripcion || '',
       secuencia: u.secuencia?.toString() || '',
+      nombre_sugerido: u.nombre,
     });
     setEditingId(u.id);
     setShowForm(true);
@@ -197,15 +209,34 @@ const Locations: React.FC = () => {
           <h3>{editingId ? '✏️ Editar Ubicación' : '➕ Crear Nueva Ubicación'}</h3>
           <form onSubmit={handleSubmit}>
             <div className="grid grid-2">
+              {/* Al crear: preview del nombre generado. Al editar: campo editable */}
               <div className="form-group">
                 <label>Nombre:</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={formData.nombre}
-                  onChange={e => setFormData({ ...formData, nombre: e.target.value })}
-                  required
-                />
+                {editingId ? (
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={formData.nombre_sugerido}
+                    onChange={e => setFormData({ ...formData, nombre_sugerido: e.target.value })}
+                    required
+                  />
+                ) : (
+                  <div style={{
+                    padding: '8px 12px',
+                    background: '#e8f4fd',
+                    border: '1px solid #1572e8',
+                    borderRadius: 6,
+                    fontWeight: 700,
+                    color: '#1572e8',
+                    fontSize: 15,
+                    letterSpacing: 1,
+                  }}>
+                    {loadingSeq ? 'Calculando...' : (formData.nombre_sugerido || `${TIPO_NOMBRE[formData.tipo]} 0001`)}
+                    <small style={{ display: 'block', fontWeight: 400, color: '#666', fontSize: 11, marginTop: 2 }}>
+                      Generado automáticamente
+                    </small>
+                  </div>
+                )}
               </div>
               <div className="form-group">
                 <label>Tipo:</label>
@@ -213,6 +244,7 @@ const Locations: React.FC = () => {
                   className="form-control"
                   value={formData.tipo}
                   onChange={e => handleTipoChange(e.target.value)}
+                  disabled={!!editingId}
                 >
                   <option value="granja">Granja</option>
                   <option value="galpon">Galpón</option>
@@ -232,25 +264,6 @@ const Locations: React.FC = () => {
                 />
               </div>
               <div className="form-group">
-                <label>
-                  Secuencia / Orden:
-                  {loadingSeq && <span style={{ marginLeft: 8, fontSize: 12, color: '#888' }}>calculando...</span>}
-                </label>
-                <input
-                  type="number"
-                  className="form-control"
-                  value={formData.secuencia}
-                  onChange={e => setFormData({ ...formData, secuencia: e.target.value })}
-                  min="1"
-                  placeholder="Auto-asignado"
-                />
-                {!editingId && (
-                  <small style={{ color: '#888' }}>
-                    Se asigna automáticamente. Puedes cambiarlo para reordenar.
-                  </small>
-                )}
-              </div>
-              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                 <label>Descripción:</label>
                 <input
                   type="text"

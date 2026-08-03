@@ -22,7 +22,15 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /next-sequence?tipo=corral — devuelve el siguiente número de secuencia
+const TIPO_NOMBRE: Record<string, string> = {
+  granja:      'Granja',
+  galpon:      'Galpón',
+  corral:      'Corral',
+  maternidad:  'Maternidad',
+  aislamiento: 'Aislamiento',
+};
+
+// GET /next-sequence?tipo=corral — devuelve el siguiente número de secuencia y nombre sugerido
 router.get('/next-sequence', authenticateToken, async (req, res) => {
   try {
     const { tipo = 'corral' } = req.query;
@@ -30,33 +38,35 @@ router.get('/next-sequence', authenticateToken, async (req, res) => {
       `SELECT COALESCE(MAX(secuencia), 0) + 1 as siguiente FROM ubicaciones WHERE tipo = $1`,
       [tipo]
     );
-    res.json({ siguiente: result.rows[0].siguiente });
+    const siguiente = parseInt(result.rows[0].siguiente);
+    const nombre_sugerido = `${TIPO_NOMBRE[tipo] || tipo} ${String(siguiente).padStart(4, '0')}`;
+    res.json({ siguiente, nombre_sugerido });
   } catch (error) {
     res.status(500).json({ error: 'Error obteniendo secuencia' });
   }
 });
 
 router.post('/', authenticateToken, csrfProtection, [
-  body('nombre').trim().isLength({ min: 1, max: 100 }),
   body('tipo').isIn(['granja', 'galpon', 'corral', 'maternidad', 'aislamiento'])
 ], asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) throw new AppError('Datos inválidos', 400);
 
-  const { nombre, tipo, capacidad_maxima, descripcion } = req.body;
+  const { tipo, capacidad_maxima, descripcion } = req.body;
 
-  // Calcular secuencia automática para el tipo
+  // Calcular secuencia y generar nombre automáticamente
   const seqRes = await query(
     `SELECT COALESCE(MAX(secuencia), 0) + 1 as siguiente FROM ubicaciones WHERE tipo = $1`,
     [tipo]
   );
-  const secuencia = seqRes.rows[0].siguiente;
+  const secuencia = parseInt(seqRes.rows[0].siguiente);
+  const nombre = `${TIPO_NOMBRE[tipo] || tipo} ${String(secuencia).padStart(4, '0')}`;
 
   const result = await query(
     'INSERT INTO ubicaciones (nombre, tipo, capacidad_maxima, descripcion, secuencia) VALUES ($1,$2,$3,$4,$5) RETURNING id',
     [nombre, tipo, capacidad_maxima || null, descripcion || null, secuencia]
   );
-  res.status(201).json({ message: 'Ubicación creada exitosamente', id: result.rows[0].id, secuencia });
+  res.status(201).json({ message: 'Ubicación creada exitosamente', id: result.rows[0].id, nombre, secuencia });
 }));
 
 router.post('/move-animal', authenticateToken, [
