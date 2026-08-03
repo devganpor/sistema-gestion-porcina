@@ -99,6 +99,8 @@ const parseDate = (s: string) => {
   const [y, m, d] = s.split('T')[0].split('-').map(Number);
   return new Date(y, m - 1, d);
 };
+
+const NutritionComplete: React.FC = () => {
   // --- Dietas ---
   const [diets, setDiets] = useState<Diet[]>([]);
   const [loading, setLoading] = useState(true);
