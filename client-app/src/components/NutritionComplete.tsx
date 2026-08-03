@@ -70,26 +70,35 @@ const emptyPlanForm = {
   fecha_inicio: new Date().toISOString().split('T')[0]
 };
 
-// Convierte número serial de Excel a fecha YYYY-MM-DD
+// Convierte fecha de Excel a YYYY-MM-DD sin desfase de zona horaria
 const excelDateToISO = (val: any): string => {
   if (!val) return '';
-  if (val instanceof Date) return val.toISOString().split('T')[0];
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  if (val instanceof Date) {
+    // Usar partes locales para evitar desfase UTC
+    return `${val.getFullYear()}-${pad(val.getMonth() + 1)}-${pad(val.getDate())}`;
+  }
   if (typeof val === 'number') {
-    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
-    return d.toISOString().split('T')[0];
+    // Serial Excel: sumar días desde 1900-01-01 sin pasar por UTC
+    const d = new Date(1899, 11, 30 + Math.round(val));
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   }
   // string tipo "31/7/2026" o "31-07-2026"
   const s = val.toString().trim();
   const parts = s.split(/[\/\-]/);
   if (parts.length === 3) {
     const [a, b, c] = parts;
-    if (c.length === 4) return `${c}-${b.padStart(2,'0')}-${a.padStart(2,'0')}`;
+    if (c.length === 4) return `${c}-${pad(parseInt(b))}-${pad(parseInt(a))}`;
     return s;
   }
   return s;
 };
 
-const NutritionComplete: React.FC = () => {
+// Parsea YYYY-MM-DD sin desfase de zona horaria
+const parseDate = (s: string) => {
+  const [y, m, d] = s.split('T')[0].split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
   // --- Dietas ---
   const [diets, setDiets] = useState<Diet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -581,7 +590,7 @@ const NutritionComplete: React.FC = () => {
                                   <td style={{ fontWeight: '600', color: '#1572e8' }}>{e.cad_kg_animal}</td>
                                   <td>{e.fecha_inicio}</td>
                                   <td>{e.fecha_fin}</td>
-                                  <td>{Math.round((new Date(e.fecha_fin).getTime() - new Date(e.fecha_inicio).getTime()) / 86400000) + 1}</td>
+                                  <td>{Math.round((parseDate(e.fecha_fin).getTime() - parseDate(e.fecha_inicio).getTime()) / 86400000) + 1}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -745,7 +754,7 @@ const NutritionComplete: React.FC = () => {
                           </div>
                           <div style={{ marginTop: '10px', fontSize: '12px', color: '#6c757d' }}>
                             <i className="fas fa-calendar" style={{ marginRight: '5px' }}></i>
-                            Inicio: {new Date(plan.fecha_inicio).toLocaleDateString()}
+                            Inicio: {parseDate(plan.fecha_inicio).toLocaleDateString()}
                           </div>
                         </div>
                       ))}
@@ -768,7 +777,7 @@ const NutritionComplete: React.FC = () => {
                         <h5 style={{ margin: '0 0 10px 0', color: '#fff' }}>{selectedPlan.nombre}</h5>
                         <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', fontSize: '14px' }}>
                           <span><i className="fas fa-paw" style={{ marginRight: '6px' }}></i>{selectedPlan.total_animales} animales</span>
-                          <span><i className="fas fa-calendar" style={{ marginRight: '6px' }}></i>Inicio: {new Date(selectedPlan.fecha_inicio).toLocaleDateString()}</span>
+                          <span><i className="fas fa-calendar" style={{ marginRight: '6px' }}></i>Inicio: {parseDate(selectedPlan.fecha_inicio).toLocaleDateString()}</span>
                           <span><i className="fas fa-clock" style={{ marginRight: '6px' }}></i>{selectedPlan.total_dias} días</span>
                           <span><i className="fas fa-box" style={{ marginRight: '6px' }}></i>{selectedPlan.kg_por_saco} kg/saco</span>
                         </div>
@@ -818,8 +827,8 @@ const NutritionComplete: React.FC = () => {
                                     <td><span style={{ background: '#1572e8', color: '#fff', borderRadius: '12px', padding: '3px 10px', fontSize: '12px', fontWeight: '700' }}>Sem {e.semana}</span></td>
                                     <td style={{ fontWeight: '600' }}>{e.alimento}</td>
                                     <td style={{ color: '#1572e8', fontWeight: '700' }}>{e.cad_kg_animal} kg</td>
-                                    <td>{new Date(e.fecha_inicio).toLocaleDateString()}</td>
-                                    <td>{new Date(e.fecha_fin).toLocaleDateString()}</td>
+                                    <td>{parseDate(e.fecha_inicio).toLocaleDateString()}</td>
+                                    <td>{parseDate(e.fecha_fin).toLocaleDateString()}</td>
                                     <td>{e.dias}</td>
                                     <td style={{ fontWeight: '600' }}>{e.consumo_total_kg.toLocaleString()} kg</td>
                                     <td><span style={{ background: '#31ce36', color: '#fff', borderRadius: '12px', padding: '3px 10px', fontSize: '12px', fontWeight: '700' }}>{e.sacos_etapa} sacos</span></td>
@@ -842,11 +851,11 @@ const NutritionComplete: React.FC = () => {
                             </thead>
                             <tbody>
                               {planDetail.dias.map((d, i) => {
-                                const esSabado = new Date(d.fecha).getDay() === 6;
+                                const esSabado = parseDate(d.fecha).getDay() === 6;
                                 return (
                                   <tr key={i} style={{ background: esSabado ? '#f0fff4' : undefined }}>
                                     <td style={{ fontWeight: '700', color: '#1572e8' }}>{d.dia}</td>
-                                    <td>{new Date(d.fecha).toLocaleDateString()}</td>
+                                    <td>{parseDate(d.fecha).toLocaleDateString()}</td>
                                     <td><span style={{ background: '#ebedf2', borderRadius: '10px', padding: '2px 8px', fontSize: '11px', fontWeight: '600' }}>S{d.semana}</span></td>
                                     <td style={{ fontSize: '12px' }}>{d.alimento}</td>
                                     <td style={{ fontWeight: '600' }}>{d.cad_kg_animal}</td>
