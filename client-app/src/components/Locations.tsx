@@ -23,7 +23,7 @@ const fmtSeq = (n: number | null, fallback: number) =>
 
 const TIPO_NOMBRE: Record<string, string> = {
   granja:      'Granja',
-  galpon:      'Galpón',
+  galpon:      'Galpon',
   corral:      'Corral',
   maternidad:  'Maternidad',
   aislamiento: 'Aislamiento',

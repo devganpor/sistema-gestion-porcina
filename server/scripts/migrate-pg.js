@@ -94,8 +94,7 @@ async function createTables() {
         THEN ALTER TABLE ubicaciones ADD COLUMN secuencia INTEGER; END IF;
       END $$;
     `);
-    // Reasignar secuencias correctamente: independiente por tipo, ordenado por numero en nombre
-    // Se ejecuta siempre para corregir secuencias mal asignadas en deploys anteriores
+    // Reasignar secuencias correctamente: independiente por tipo, ordenado por id de creacion
     await client.query(`
       UPDATE ubicaciones u
       SET secuencia = sub.rn
@@ -103,30 +102,25 @@ async function createTables() {
         SELECT id,
                ROW_NUMBER() OVER (
                  PARTITION BY tipo
-                 ORDER BY
-                   CASE WHEN nombre ~ '[0-9]+'
-                        THEN (regexp_match(nombre, '[0-9]+'))[1]::integer
-                        ELSE id
-                   END
+                 ORDER BY id
                ) as rn
         FROM ubicaciones
       ) sub
       WHERE u.id = sub.id;
     `);
-    // Renombrar al formato estandar solo las que tienen patron antiguo "Tipo Numero"
+    // Renombrar al formato estandar todas las ubicaciones
     await client.query(`
       UPDATE ubicaciones
       SET nombre = (
         CASE tipo
           WHEN 'granja'      THEN 'Granja '
-          WHEN 'galpon'      THEN 'Galp\u00f3n '
+          WHEN 'galpon'      THEN 'Galpon '
           WHEN 'corral'      THEN 'Corral '
           WHEN 'maternidad'  THEN 'Maternidad '
           WHEN 'aislamiento' THEN 'Aislamiento '
           ELSE initcap(tipo) || ' '
         END || lpad(secuencia::text, 4, '0')
-      )
-      WHERE nombre ~ '^(Granja|Galp.n|Corral|Maternidad|Aislamiento) [0-9]+$';
+      );
     `);
 
     await client.query(`

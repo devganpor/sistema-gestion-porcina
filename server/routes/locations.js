@@ -24,7 +24,7 @@ router.get('/', authenticateToken, async (req, res) => {
 
 const TIPO_NOMBRE = {
   granja:      'Granja',
-  galpon:      'Galpón',
+  galpon:      'Galpon',
   corral:      'Corral',
   maternidad:  'Maternidad',
   aislamiento: 'Aislamiento',
