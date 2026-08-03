@@ -8,6 +8,7 @@ interface Ubicacion {
   capacidad_maxima: number;
   animales_actuales: number;
   secuencia: number | null;
+  etiqueta: string | null;
   descripcion: string;
 }
 
@@ -49,6 +50,7 @@ const Locations: React.FC = () => {
     tipo: 'corral',
     capacidad_maxima: '',
     descripcion: '',
+    etiqueta: '',
     secuencia: '',
     nombre_sugerido: '',
   });
@@ -117,6 +119,7 @@ const Locations: React.FC = () => {
         tipo: formData.tipo,
         capacidad_maxima: formData.capacidad_maxima ? parseInt(formData.capacidad_maxima) : null,
         descripcion: formData.descripcion || null,
+        etiqueta: formData.etiqueta || null,
       };
       if (editingId) {
         // Al editar sí se puede cambiar el nombre manualmente
@@ -137,7 +140,7 @@ const Locations: React.FC = () => {
   const resetForm = () => {
     setShowForm(false);
     setEditingId(null);
-    setFormData({ tipo: 'corral', capacidad_maxima: '', descripcion: '', secuencia: '', nombre_sugerido: '' });
+    setFormData({ tipo: 'corral', capacidad_maxima: '', descripcion: '', etiqueta: '', secuencia: '', nombre_sugerido: '' });
   };
 
   const handleEdit = (u: Ubicacion) => {
@@ -145,6 +148,7 @@ const Locations: React.FC = () => {
       tipo: u.tipo || 'corral',
       capacidad_maxima: u.capacidad_maxima?.toString() || '',
       descripcion: u.descripcion || '',
+      etiqueta: u.etiqueta || '',
       secuencia: u.secuencia?.toString() || '',
       nombre_sugerido: u.nombre,
     });
@@ -264,6 +268,17 @@ const Locations: React.FC = () => {
                 />
               </div>
               <div className="form-group">
+                <label>Etiqueta <small style={{color:'#888'}}>(opcional)</small>:</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={formData.etiqueta}
+                  onChange={e => setFormData({ ...formData, etiqueta: e.target.value })}
+                  placeholder="Ej: Engorde, Lechones, Gestación..."
+                  maxLength={100}
+                />
+              </div>
+              <div className="form-group">
                 <label>Descripción:</label>
                 <input
                   type="text"
@@ -319,7 +334,7 @@ const Locations: React.FC = () => {
                   <option value="">Seleccionar ubicación</option>
                   {ubicaciones.map(u => (
                     <option key={u.id} value={u.id}>
-                      {u.secuencia ? `#${fmtSeq(u.secuencia, 0)} ` : ''}{u.nombre} ({u.tipo}) — {u.animales_actuales}/{u.capacidad_maxima || '∞'}
+                      {u.secuencia ? `#${fmtSeq(u.secuencia, 0)} ` : ''}{u.nombre}{u.etiqueta ? ` — ${u.etiqueta}` : ''} ({u.tipo}) — {u.animales_actuales}/{u.capacidad_maxima || '∞'}
                     </option>
                   ))}
                 </select>
@@ -397,6 +412,21 @@ const Locations: React.FC = () => {
                         <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {u.nombre}
                         </div>
+                        {u.etiqueta && (
+                          <div style={{
+                            display: 'inline-block',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            background: '#e8f4fd',
+                            color: '#1572e8',
+                            borderRadius: 10,
+                            padding: '1px 8px',
+                            marginTop: 2,
+                            marginBottom: 2,
+                          }}>
+                            {u.etiqueta}
+                          </div>
+                        )}
                         {u.capacidad_maxima ? (
                           <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
                             {u.animales_actuales}/{u.capacidad_maxima} animales

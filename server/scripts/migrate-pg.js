@@ -80,14 +80,21 @@ async function createTables() {
         END IF;
       END $$;
     `);
-    // Agregar columna 'tipo' si no existe (tablas creadas sin ella)
+    // Agregar columna 'tipo' si no existe
     await client.query(`
       DO $$ BEGIN
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ubicaciones' AND column_name='tipo')
         THEN ALTER TABLE ubicaciones ADD COLUMN tipo VARCHAR(50); END IF;
       END $$;
     `);
-    // Agregar columna 'secuencia' para orden de corrales
+    // Agregar columna 'etiqueta' para identificacion personalizada
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ubicaciones' AND column_name='etiqueta')
+        THEN ALTER TABLE ubicaciones ADD COLUMN etiqueta VARCHAR(100); END IF;
+      END $$;
+    `);
+    // Agregar columna 'secuencia' para orden
     await client.query(`
       DO $$ BEGIN
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ubicaciones' AND column_name='secuencia')

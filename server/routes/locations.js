@@ -52,7 +52,7 @@ router.post('/', authenticateToken, csrfProtection, [
   const errors = validationResult(req);
   if (!errors.isEmpty()) throw new AppError('Datos inválidos', 400);
 
-  const { tipo, capacidad_maxima, descripcion } = req.body;
+  const { tipo, capacidad_maxima, descripcion, etiqueta } = req.body;
 
   // Calcular secuencia y generar nombre automáticamente
   const seqRes = await query(
@@ -63,8 +63,8 @@ router.post('/', authenticateToken, csrfProtection, [
   const nombre = `${TIPO_NOMBRE[tipo] || tipo} ${String(secuencia).padStart(4, '0')}`;
 
   const result = await query(
-    'INSERT INTO ubicaciones (nombre, tipo, capacidad_maxima, descripcion, secuencia) VALUES ($1,$2,$3,$4,$5) RETURNING id',
-    [nombre, tipo, capacidad_maxima || null, descripcion || null, secuencia]
+    'INSERT INTO ubicaciones (nombre, tipo, capacidad_maxima, descripcion, secuencia, etiqueta) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+    [nombre, tipo, capacidad_maxima || null, descripcion || null, secuencia, etiqueta || null]
   );
   res.status(201).json({ message: 'Ubicación creada exitosamente', id: result.rows[0].id, nombre, secuencia });
 }));
@@ -125,10 +125,10 @@ router.get('/occupancy', authenticateToken, async (req, res) => {
 
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { nombre, tipo, capacidad_maxima, descripcion, secuencia } = req.body;
+    const { nombre, tipo, capacidad_maxima, descripcion, secuencia, etiqueta } = req.body;
     await query(
-      'UPDATE ubicaciones SET nombre=$1, tipo=$2, capacidad_maxima=$3, descripcion=$4, secuencia=$5 WHERE id=$6',
-      [nombre, tipo, capacidad_maxima || null, descripcion || null, secuencia || null, req.params.id]
+      'UPDATE ubicaciones SET nombre=$1, tipo=$2, capacidad_maxima=$3, descripcion=$4, secuencia=$5, etiqueta=$6 WHERE id=$7',
+      [nombre, tipo, capacidad_maxima || null, descripcion || null, secuencia || null, etiqueta || null, req.params.id]
     );
     res.json({ message: 'Ubicación actualizada exitosamente' });
   } catch (error) {
