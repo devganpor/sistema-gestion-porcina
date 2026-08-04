@@ -9,6 +9,7 @@ interface Medication {
   dosis_recomendada: string;
   stock_actual: number;
   fecha_vencimiento: string | null;
+  costo_unitario: number;
 }
 
 interface Animal {
@@ -26,6 +27,7 @@ const emptyForm = {
   dosis_recomendada: '',
   stock_actual: '0',
   fecha_vencimiento: '',
+  costo_unitario: '0',
 };
 
 const emptyApply = {
@@ -102,6 +104,7 @@ const Medications: React.FC = () => {
         dosis_recomendada: formData.dosis_recomendada || null,
         stock_actual: parseFloat(formData.stock_actual) || 0,
         fecha_vencimiento: formData.fecha_vencimiento || null,
+        costo_unitario: parseFloat(formData.costo_unitario) || 0,
       };
       if (editingId) {
         await api.put(`/health/medications/${editingId}`, payload);
@@ -125,6 +128,7 @@ const Medications: React.FC = () => {
       dosis_recomendada: m.dosis_recomendada || '',
       stock_actual: m.stock_actual?.toString() || '0',
       fecha_vencimiento: m.fecha_vencimiento ? m.fecha_vencimiento.split('T')[0] : '',
+      costo_unitario: m.costo_unitario?.toString() || '0',
     });
     setEditingId(m.id);
     setShowForm(true);
@@ -149,6 +153,10 @@ const Medications: React.FC = () => {
     setSubmitting(true); setError('');
     try {
       const med = meds.find(m => m.id === parseInt(applyData.medicamento_id));
+      const dosisNum = parseFloat(applyData.dosis_aplicada);
+      const costoAplicacion = (!isNaN(dosisNum) && dosisNum > 0 && med?.costo_unitario)
+        ? dosisNum * med.costo_unitario
+        : null;
       await api.post('/health/events', {
         animal_id: parseInt(applyData.animal_id),
         tipo_evento: 'tratamiento',
@@ -156,17 +164,14 @@ const Medications: React.FC = () => {
         descripcion: applyData.descripcion,
         tratamiento: `${med?.nombre || ''}${applyData.dosis_aplicada ? ` — ${applyData.dosis_aplicada}` : ''}`,
         veterinario: applyData.veterinario || null,
-        costo: null,
+        costo: costoAplicacion,
       });
       // Descontar stock
-      if (applyData.dosis_aplicada) {
-        const cantidad = parseFloat(applyData.dosis_aplicada);
-        if (!isNaN(cantidad) && cantidad > 0) {
-          await api.put(`/health/medications/${applyData.medicamento_id}`, {
-            ...med,
-            stock_actual: Math.max(0, (med?.stock_actual || 0) - cantidad),
-          });
-        }
+      if (!isNaN(dosisNum) && dosisNum > 0) {
+        await api.put(`/health/medications/${applyData.medicamento_id}`, {
+          ...med,
+          stock_actual: Math.max(0, (med?.stock_actual || 0) - dosisNum),
+        });
       }
       showSuccess('Aplicación registrada exitosamente');
       setApplyData(emptyApply);
@@ -280,6 +285,10 @@ const Medications: React.FC = () => {
                       <label style={{ display: 'block', marginBottom: 5, fontWeight: 600 }}>Dosis recomendada</label>
                       <input type="text" value={formData.dosis_recomendada} onChange={e => setFormData({ ...formData, dosis_recomendada: e.target.value })} style={inp()} placeholder="Ej: 1ml/10kg" />
                     </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: 5, fontWeight: 600 }}>Costo unitario ($/unidad)</label>
+                      <input type="number" step="0.01" min="0" value={formData.costo_unitario} onChange={e => setFormData({ ...formData, costo_unitario: e.target.value })} style={inp()} placeholder="0.00" />
+                    </div>
                   </div>
                   <div style={{ display: 'flex', gap: 10 }}>
                     <button type="submit" className="btn btn-success" disabled={submitting}>
@@ -322,7 +331,7 @@ const Medications: React.FC = () => {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Nombre</th><th>Tipo</th><th>Stock</th><th>Dosis recomendada</th><th>Días retiro</th><th>Vencimiento</th><th>Acciones</th>
+                      <th>Nombre</th><th>Tipo</th><th>Stock</th><th>Dosis recomendada</th><th>Costo unit.</th><th>Días retiro</th><th>Vencimiento</th><th>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -342,6 +351,7 @@ const Medications: React.FC = () => {
                             </span>
                           </td>
                           <td>{m.dosis_recomendada || '-'}</td>
+                          <td style={{ fontWeight: 600 }}>{m.costo_unitario > 0 ? `$${Number(m.costo_unitario).toFixed(2)}` : '-'}</td>
                           <td>{m.dias_retiro > 0 ? `${m.dias_retiro} días` : '-'}</td>
                           <td>
                             {m.fecha_vencimiento ? (
@@ -420,7 +430,15 @@ const Medications: React.FC = () => {
                   </div>
                   <div>
                     <label style={{ display: 'block', marginBottom: 5, fontWeight: 600 }}>Dosis aplicada <small style={{ color: '#888' }}>(descuenta stock)</small></label>
-                    <input type="text" value={applyData.dosis_aplicada} onChange={e => setApplyData({ ...applyData, dosis_aplicada: e.target.value })} style={inp()} placeholder="Ej: 5ml" />
+                    <input type="number" step="0.01" min="0" value={applyData.dosis_aplicada} onChange={e => setApplyData({ ...applyData, dosis_aplicada: e.target.value })} style={inp()} placeholder="Ej: 5" />
+                    {applyData.medicamento_id && applyData.dosis_aplicada && (() => {
+                      const med = meds.find(m => m.id === parseInt(applyData.medicamento_id));
+                      const d = parseFloat(applyData.dosis_aplicada);
+                      if (med?.costo_unitario && !isNaN(d) && d > 0) {
+                        return <small style={{ color: '#31ce36', fontWeight: 600 }}>Costo estimado: ${(d * med.costo_unitario).toFixed(2)}</small>;
+                      }
+                      return null;
+                    })()}
                   </div>
                   <div>
                     <label style={{ display: 'block', marginBottom: 5, fontWeight: 600 }}>Veterinario / Responsable</label>

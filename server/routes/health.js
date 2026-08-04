@@ -21,10 +21,10 @@ router.post('/medications', authenticateToken, [
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const { nombre, tipo, dias_retiro, dosis_recomendada, stock_actual, fecha_vencimiento } = req.body;
+    const { nombre, tipo, dias_retiro, dosis_recomendada, stock_actual, fecha_vencimiento, costo_unitario } = req.body;
     await query(
-      'INSERT INTO medicamentos (nombre, tipo, dias_retiro, dosis_recomendada, stock_actual, fecha_vencimiento) VALUES ($1, $2, $3, $4, $5, $6)',
-      [nombre, tipo, dias_retiro || 0, dosis_recomendada, stock_actual || 0, fecha_vencimiento]
+      'INSERT INTO medicamentos (nombre, tipo, dias_retiro, dosis_recomendada, stock_actual, fecha_vencimiento, costo_unitario) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [nombre, tipo, dias_retiro || 0, dosis_recomendada, stock_actual || 0, fecha_vencimiento, costo_unitario || 0]
     );
     res.status(201).json({ message: 'Medicamento creado exitosamente' });
   } catch (error) {
@@ -188,10 +188,10 @@ router.delete('/events/:id', authenticateToken, async (req, res) => {
 
 router.put('/medications/:id', authenticateToken, async (req, res) => {
   try {
-    const { nombre, tipo, dias_retiro, dosis_recomendada, stock_actual, fecha_vencimiento } = req.body;
+    const { nombre, tipo, dias_retiro, dosis_recomendada, stock_actual, fecha_vencimiento, costo_unitario } = req.body;
     await query(
-      'UPDATE medicamentos SET nombre=$1, tipo=$2, dias_retiro=$3, dosis_recomendada=$4, stock_actual=$5, fecha_vencimiento=$6 WHERE id=$7',
-      [nombre, tipo, dias_retiro, dosis_recomendada, stock_actual, fecha_vencimiento, req.params.id]
+      'UPDATE medicamentos SET nombre=$1, tipo=$2, dias_retiro=$3, dosis_recomendada=$4, stock_actual=$5, fecha_vencimiento=$6, costo_unitario=$7 WHERE id=$8',
+      [nombre, tipo, dias_retiro, dosis_recomendada, stock_actual, fecha_vencimiento, costo_unitario ?? 0, req.params.id]
     );
     res.json({ message: 'Medicamento actualizado exitosamente' });
   } catch (error) {

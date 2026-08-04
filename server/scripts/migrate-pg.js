@@ -328,6 +328,20 @@ async function createTables() {
         THEN ALTER TABLE animales ADD COLUMN motivo_salida VARCHAR(255); END IF;
       END $$;
     `);
+    // eventos_sanitarios: agregar tratamiento si no existe (tabla creada antes de esta columna)
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eventos_sanitarios' AND column_name='tratamiento')
+        THEN ALTER TABLE eventos_sanitarios ADD COLUMN tratamiento TEXT; END IF;
+      END $$;
+    `);
+    // medicamentos: agregar costo_unitario si no existe
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medicamentos' AND column_name='costo_unitario')
+        THEN ALTER TABLE medicamentos ADD COLUMN costo_unitario DECIMAL(10,2) DEFAULT 0; END IF;
+      END $$;
+    `);
     // gastos: fecha_gasto -> fecha
     await client.query(`
       DO $$ BEGIN
