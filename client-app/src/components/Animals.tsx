@@ -74,6 +74,7 @@ const Animals: React.FC = () => {
   const [showTraceModal, setShowTraceModal] = useState(false);
   const [traceData, setTraceData] = useState<Trazabilidad | null>(null);
   const [traceLoading, setTraceLoading] = useState(false);
+  const [traceError, setTraceError] = useState('');
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [moveAnimal, setMoveAnimal] = useState<Animal | null>(null);
   const [moveForm, setMoveForm] = useState({ ubicacion_destino_id: '', fecha: new Date().toISOString().split('T')[0], motivo: '', peso_momento: '', observaciones: '' });
@@ -301,13 +302,17 @@ const Animals: React.FC = () => {
 
   const handleTrace = async (animal: Animal) => {
     setTraceLoading(true);
-    setShowTraceModal(true);
+    setTraceError('');
     setTraceData(null);
+    setShowTraceModal(true);
     try {
       const res = await api.get(`/animals/${animal.id}/trazabilidad`);
       setTraceData(res.data);
-    } catch { setTraceData(null); }
-    finally { setTraceLoading(false); }
+    } catch (err: any) {
+      setTraceError(err.response?.data?.error || err.message || 'Error cargando trazabilidad');
+    } finally {
+      setTraceLoading(false);
+    }
   };
 
   const handleOpenMove = (animal: Animal) => {
@@ -934,14 +939,14 @@ const Animals: React.FC = () => {
       )}
       {/* Modal Trazabilidad */}
       {showTraceModal && (
-        <div className="modal-overlay" onClick={() => setShowTraceModal(false)}>
+        <div className="modal-overlay" onClick={() => { setShowTraceModal(false); setTraceError(''); }}>
           <div className="modal-content" style={{ maxWidth: '960px', maxHeight: '92vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
             <div className="card-header" style={{ background: 'linear-gradient(135deg, #6f42c1 0%, #4a148c 100%)', color: 'white', position: 'sticky', top: 0, zIndex: 10 }}>
               <h5 className="card-title" style={{ color: 'white', margin: 0 }}>
                 <i className="fas fa-route" style={{ marginRight: '10px' }} />
                 Trazabilidad Completa del Animal
               </h5>
-              <button onClick={() => setShowTraceModal(false)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'white' }}>
+              <button onClick={() => { setShowTraceModal(false); setTraceError(''); }} style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'white' }}>
                 <i className="fas fa-times" />
               </button>
             </div>
@@ -950,6 +955,13 @@ const Animals: React.FC = () => {
                 <div style={{ textAlign: 'center', padding: '40px' }}>
                   <i className="fas fa-spinner fa-spin" style={{ fontSize: '32px', color: '#6f42c1' }} />
                   <p style={{ marginTop: '10px', color: '#6c757d' }}>Cargando trazabilidad...</p>
+                </div>
+              )}
+              {!traceLoading && traceError && (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <i className="fas fa-exclamation-triangle" style={{ fontSize: '40px', color: '#f25961', marginBottom: 12 }} />
+                  <p style={{ color: '#f25961', fontWeight: 600 }}>{traceError}</p>
+                  <small style={{ color: '#6c757d' }}>Revisa la consola del servidor para más detalles.</small>
                 </div>
               )}
               {!traceLoading && traceData && (() => {
