@@ -15,6 +15,8 @@ const UserManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [resetPasswordId, setResetPasswordId] = useState<number | null>(null);
+  const [newPassword, setNewPassword] = useState('');
   const [formData, setFormData] = useState({
     nombre: '',
     email: '',
@@ -101,6 +103,16 @@ const UserManagement: React.FC = () => {
     } catch (error) {
       alert('Error cambiando estado del usuario');
     }
+  };
+
+  const handleResetPassword = async () => {
+    if (!newPassword || newPassword.length < 6) { alert('La contraseña debe tener al menos 6 caracteres'); return; }
+    try {
+      await api.put(`/users/${resetPasswordId}/password`, { newPassword });
+      setResetPasswordId(null);
+      setNewPassword('');
+      alert('Contraseña actualizada exitosamente');
+    } catch { alert('Error actualizando contraseña'); }
   };
 
   const getRoleInfo = (rol: string) => {
@@ -354,6 +366,13 @@ const UserManagement: React.FC = () => {
                           >
                             <i className="fas fa-edit"></i>
                           </button>
+                          <button
+                            className="btn btn-info btn-sm"
+                            title="Resetear contraseña"
+                            onClick={() => { setResetPasswordId(user.id); setNewPassword(''); }}
+                          >
+                            <i className="fas fa-key"></i>
+                          </button>
                           <button 
                             className={`btn ${user.activo ? 'btn-danger' : 'btn-success'} btn-sm`}
                             title={user.activo ? 'Desactivar' : 'Activar'}
@@ -383,6 +402,32 @@ const UserManagement: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Modal reset contraseña */}
+      {resetPasswordId && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 28, width: 360, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+            <h5 style={{ marginBottom: 16 }}><i className="fas fa-key" style={{ marginRight: 8, color: '#1572e8' }}></i>Resetear Contraseña</h5>
+            <p style={{ fontSize: 13, color: '#6c757d', marginBottom: 16 }}>
+              Usuario: <strong>{users.find(u => u.id === resetPasswordId)?.nombre}</strong>
+            </p>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              placeholder="Nueva contraseña (mín. 6 caracteres)"
+              style={{ width: '100%', padding: '10px', border: '1px solid #ebedf2', borderRadius: 8, fontSize: 14, marginBottom: 16 }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn btn-success" onClick={handleResetPassword}>
+                <i className="fas fa-save" style={{ marginRight: 6 }}></i>Guardar
+              </button>
+              <button className="btn btn-secondary" onClick={() => { setResetPasswordId(null); setNewPassword(''); }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

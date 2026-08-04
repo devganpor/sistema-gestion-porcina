@@ -10,6 +10,10 @@ interface Ubicacion {
   secuencia: number | null;
   etiqueta: string | null;
   descripcion: string;
+  granja_id: number | null;
+  galpon_id: number | null;
+  granja_nombre: string | null;
+  galpon_nombre: string | null;
 }
 
 interface Animal {
@@ -53,6 +57,8 @@ const Locations: React.FC = () => {
     etiqueta: '',
     secuencia: '',
     nombre_sugerido: '',
+    granja_id: '',
+    galpon_id: '',
   });
   const [moveData, setMoveData] = useState({
     animal_id: '',
@@ -120,6 +126,8 @@ const Locations: React.FC = () => {
         capacidad_maxima: formData.capacidad_maxima ? parseInt(formData.capacidad_maxima) : null,
         descripcion: formData.descripcion || null,
         etiqueta: formData.etiqueta || null,
+        granja_id: formData.granja_id ? parseInt(formData.granja_id) : null,
+        galpon_id: formData.galpon_id ? parseInt(formData.galpon_id) : null,
       };
       if (editingId) {
         // Al editar sí se puede cambiar el nombre manualmente
@@ -140,7 +148,7 @@ const Locations: React.FC = () => {
   const resetForm = () => {
     setShowForm(false);
     setEditingId(null);
-    setFormData({ tipo: 'corral', capacidad_maxima: '', descripcion: '', etiqueta: '', secuencia: '', nombre_sugerido: '' });
+    setFormData({ tipo: 'corral', capacidad_maxima: '', descripcion: '', etiqueta: '', secuencia: '', nombre_sugerido: '', granja_id: '', galpon_id: '' });
   };
 
   const handleEdit = (u: Ubicacion) => {
@@ -151,6 +159,8 @@ const Locations: React.FC = () => {
       etiqueta: u.etiqueta || '',
       secuencia: u.secuencia?.toString() || '',
       nombre_sugerido: u.nombre,
+      granja_id: u.granja_id?.toString() || '',
+      galpon_id: u.galpon_id?.toString() || '',
     });
     setEditingId(u.id);
     setShowForm(true);
@@ -278,6 +288,36 @@ const Locations: React.FC = () => {
                   maxLength={100}
                 />
               </div>
+              {formData.tipo === 'galpon' && (
+                <div className="form-group">
+                  <label>Granja a la que pertenece:</label>
+                  <select
+                    className="form-control"
+                    value={formData.granja_id}
+                    onChange={e => setFormData({ ...formData, granja_id: e.target.value })}
+                  >
+                    <option value="">— Sin granja —</option>
+                    {ubicaciones.filter(u => u.tipo === 'granja').map(u => (
+                      <option key={u.id} value={u.id}>{u.nombre}{u.etiqueta ? ` — ${u.etiqueta}` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {formData.tipo === 'corral' && (
+                <div className="form-group">
+                  <label>Galpón al que pertenece:</label>
+                  <select
+                    className="form-control"
+                    value={formData.galpon_id}
+                    onChange={e => setFormData({ ...formData, galpon_id: e.target.value })}
+                  >
+                    <option value="">— Sin galpón —</option>
+                    {ubicaciones.filter(u => u.tipo === 'galpon').map(u => (
+                      <option key={u.id} value={u.id}>{u.nombre}{u.etiqueta ? ` — ${u.etiqueta}` : ''}{u.granja_nombre ? ` (${u.granja_nombre})` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="form-group">
                 <label>Descripción:</label>
                 <input
@@ -413,31 +453,37 @@ const Locations: React.FC = () => {
                           {u.nombre}
                         </div>
                         {u.etiqueta && (
-                          <div style={{
-                            display: 'inline-block',
-                            fontSize: 11,
-                            fontWeight: 600,
-                            background: '#e8f4fd',
-                            color: '#1572e8',
-                            borderRadius: 10,
-                            padding: '1px 8px',
-                            marginTop: 2,
-                            marginBottom: 2,
-                          }}>
+                          <div style={{ display: 'inline-block', fontSize: 11, fontWeight: 600, background: '#e8f4fd', color: '#1572e8', borderRadius: 10, padding: '1px 8px', marginTop: 2, marginBottom: 2 }}>
                             {u.etiqueta}
                           </div>
                         )}
-                        {u.capacidad_maxima ? (
-                          <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
-                            {u.animales_actuales}/{u.capacidad_maxima} animales
-                            {' · '}
-                            {Math.round((u.animales_actuales / u.capacidad_maxima) * 100)}%
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
-                            {u.animales_actuales} animales
+                        {u.tipo === 'corral' && (u.galpon_nombre || u.granja_nombre) && (
+                          <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>
+                            {[u.granja_nombre, u.galpon_nombre].filter(Boolean).join(' › ')}
                           </div>
                         )}
+                        {u.tipo === 'galpon' && u.granja_nombre && (
+                          <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>{u.granja_nombre}</div>
+                        )}
+                        {(() => {
+                          const animalesAgregados = u.tipo === 'granja'
+                            ? ubicaciones.filter(x => x.tipo === 'galpon' && x.granja_id === u.id)
+                                .reduce((s, g) => s + ubicaciones.filter(x => x.tipo === 'corral' && x.galpon_id === g.id)
+                                  .reduce((ss, c) => ss + Number(c.animales_actuales), 0), 0)
+                            : u.tipo === 'galpon'
+                              ? ubicaciones.filter(x => x.tipo === 'corral' && x.galpon_id === u.id)
+                                  .reduce((s, c) => s + Number(c.animales_actuales), 0)
+                              : Number(u.animales_actuales);
+                          return (
+                            <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                              {u.tipo !== 'corral' ? `${animalesAgregados} animales (total corrales)` :
+                                u.capacidad_maxima
+                                  ? `${u.animales_actuales}/${u.capacidad_maxima} · ${Math.round((Number(u.animales_actuales) / u.capacidad_maxima) * 100)}%`
+                                  : `${u.animales_actuales} animales`
+                              }
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Badge ocupación */}

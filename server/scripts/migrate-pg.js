@@ -87,6 +87,19 @@ async function createTables() {
         THEN ALTER TABLE ubicaciones ADD COLUMN tipo VARCHAR(50); END IF;
       END $$;
     `);
+    // Jerarquía: granja_id en galpones, galpon_id en corrales
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ubicaciones' AND column_name='granja_id')
+        THEN ALTER TABLE ubicaciones ADD COLUMN granja_id INTEGER REFERENCES ubicaciones(id) ON DELETE SET NULL; END IF;
+      END $$;
+    `);
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ubicaciones' AND column_name='galpon_id')
+        THEN ALTER TABLE ubicaciones ADD COLUMN galpon_id INTEGER REFERENCES ubicaciones(id) ON DELETE SET NULL; END IF;
+      END $$;
+    `);
     // Agregar columna 'etiqueta' para identificacion personalizada
     await client.query(`
       DO $$ BEGIN
