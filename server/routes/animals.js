@@ -212,175 +212,123 @@ router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const [animalRes, gastosRes, eventosRes, vacunasRes, movimientosRes, ingresosRes, alimentacionRes, pesajesRes, ciclosRes] = await Promise.all([
-      query(`
-        SELECT a.*, r.nombre as raza_nombre, u.nombre as ubicacion_nombre
-        FROM animales a
-        LEFT JOIN razas r ON a.raza_id = r.id
-        LEFT JOIN ubicaciones u ON a.ubicacion_actual_id = u.id
-        WHERE a.id = $1
-      `, [id]),
-      query(`
-        SELECT fecha, categoria, descripcion, monto
-        FROM gastos WHERE animal_id = $1 ORDER BY fecha
-      `, [id]),
-      query(`
-        SELECT fecha, tipo_evento, descripcion, COALESCE(costo, 0) as costo, veterinario
-        FROM eventos_sanitarios WHERE animal_id = $1 ORDER BY fecha
-      `, [id]),
-      query(`
-        SELECT fecha_aplicacion as fecha, vacuna as descripcion
-        FROM vacunaciones WHERE animal_id = $1 ORDER BY fecha_aplicacion
-      `, [id]),
-      query(`
+    // Animal — obligatorio
+    const animalRes = await query(`
+      SELECT a.*, r.nombre as raza_nombre, u.nombre as ubicacion_nombre
+      FROM animales a
+      LEFT JOIN razas r ON a.raza_id = r.id
+      LEFT JOIN ubicaciones u ON a.ubicacion_actual_id = u.id
+      WHERE a.id = $1
+    `, [id]);
+    if (animalRes.rows.length === 0) return res.status(404).json({ error: 'Animal no encontrado' });
+    const animal = animalRes.rows[0];
+
+    // Cada fuente es independiente — si falla, devuelve array vacío
+    const safe = async (fn) => { try { return await fn(); } catch(e) { console.error('TRAZA partial error:', e.message); return { rows: [] }; } };
+
+    const [gastosRes, eventosRes, vacunasRes, movimientosRes, ingresosRes, alimentacionRes, pesajesRes, ciclosRes] = await Promise.all([
+      safe(() => query(`SELECT fecha, categoria, descripcion, monto FROM gastos WHERE animal_id=$1 ORDER BY fecha`, [id])),
+      safe(() => query(`SELECT fecha, tipo_evento, descripcion, COALESCE(costo,0) as costo, veterinario, tratamiento FROM eventos_sanitarios WHERE animal_id=$1 ORDER BY fecha`, [id])),
+      safe(() => query(`SELECT fecha_aplicacion as fecha, vacuna as descripcion FROM vacunaciones WHERE animal_id=$1 ORDER BY fecha_aplicacion`, [id])),
+      safe(() => query(`
         SELECT mu.fecha, mu.motivo, mu.costo_acumulado_momento, mu.peso_momento, mu.observaciones,
                uo.nombre as origen_nombre, ud.nombre as destino_nombre
         FROM movimientos_ubicacion mu
-        LEFT JOIN ubicaciones uo ON mu.ubicacion_origen_id = uo.id
-        LEFT JOIN ubicaciones ud ON mu.ubicacion_destino_id = ud.id
-        WHERE mu.animal_id = $1 ORDER BY mu.fecha
-      `, [id]),
-      query(`
-        SELECT fecha, tipo, descripcion, monto, peso_venta, precio_kg, comprador
-        FROM ingresos WHERE animal_id = $1 ORDER BY fecha
-      `, [id]),
-      query(`
-        SELECT fecha, dieta_nombre, kg_asignados, costo_asignado, animales_en_ubicacion,
-               ubicacion_id
-        FROM alimentacion_animal WHERE animal_id = $1 ORDER BY fecha
-      `, [id]),
-      query(`
-        SELECT peso, fecha_pesaje, observaciones
-        FROM pesajes WHERE animal_id = $1 ORDER BY fecha_pesaje
-      `, [id]),
-      query(`
+        LEFT JOIN ubicaciones uo ON mu.ubicacion_origen_id=uo.id
+        LEFT JOIN ubicaciones ud ON mu.ubicacion_destino_id=ud.id
+        WHERE mu.animal_id=$1 ORDER BY mu.fecha`, [id])),
+      safe(() => query(`
+        SELECT COALESCE(fecha, fecha_ingreso::date) as fecha,
+               COALESCE(tipo, tipo_ingreso) as tipo,
+               descripcion, monto,
+               COALESCE(peso_venta, NULL) as peso_venta,
+               COALESCE(precio_kg, NULL) as precio_kg,
+               COALESCE(comprador, NULL) as comprador
+        FROM ingresos WHERE animal_id=$1 ORDER BY 1`, [id])),
+      safe(() => query(`SELECT fecha, dieta_nombre, kg_asignados, costo_asignado FROM alimentacion_animal WHERE animal_id=$1 ORDER BY fecha`, [id])),
+      safe(() => query(`SELECT peso, fecha_pesaje, observaciones FROM pesajes WHERE animal_id=$1 ORDER BY fecha_pesaje`, [id])),
+      safe(() => query(`
         SELECT cr.numero_ciclo, cr.fecha_inicio, cr.fecha_celo, cr.fecha_servicio,
                cr.fecha_parto_esperado, cr.fecha_parto_real,
                cr.lechones_vivos, cr.lechones_muertos, cr.estado, cr.observaciones,
                v.identificador_unico as verraco_id
         FROM ciclos_reproductivos cr
-        LEFT JOIN animales v ON cr.verraco_id = v.id
-        WHERE cr.cerda_id = $1 ORDER BY cr.fecha_inicio
-      `, [id])
+        LEFT JOIN animales v ON cr.verraco_id=v.id
+        WHERE cr.cerda_id=$1 ORDER BY cr.fecha_inicio`, [id]))
     ]);
 
-    if (animalRes.rows.length === 0) return res.status(404).json({ error: 'Animal no encontrado' });
-
-    const animal = animalRes.rows[0];
-
-    // Construir linea de tiempo unificada
     const timeline = [];
 
-    // Ingreso del animal
     const fechaIngreso = animal.fecha_ingreso || animal.fecha_nacimiento || animal.created_at;
-    timeline.push({
-      fecha: fechaIngreso,
-      tipo: 'ingreso',
+    timeline.push({ fecha: fechaIngreso, tipo: 'ingreso',
       descripcion: animal.origen === 'compra' ? 'Compra del animal' : 'Nacimiento / Ingreso al sistema',
-      monto: parseFloat(animal.valor_compra || 0),
-      icono: 'fa-sign-in-alt',
-      color: '#1572e8'
-    });
+      monto: parseFloat(animal.valor_compra || 0), icono: 'fa-sign-in-alt', color: '#1572e8' });
 
-    gastosRes.rows.forEach(g => timeline.push({
-      fecha: g.fecha, tipo: 'gasto',
+    gastosRes.rows.forEach(g => timeline.push({ fecha: g.fecha, tipo: 'gasto',
       descripcion: `${g.categoria}${g.descripcion ? ' — ' + g.descripcion : ''}`,
-      monto: parseFloat(g.monto), icono: 'fa-dollar-sign', color: '#f25961'
-    }));
+      monto: parseFloat(g.monto), icono: 'fa-dollar-sign', color: '#f25961' }));
 
-    eventosRes.rows.forEach(e => timeline.push({
-      fecha: e.fecha, tipo: 'sanitario',
-      descripcion: `${e.tipo_evento}${e.descripcion ? ' — ' + e.descripcion : ''}${e.veterinario ? ' (Dr. ' + e.veterinario + ')' : ''}`,
-      monto: parseFloat(e.costo), icono: 'fa-syringe', color: '#ffad46'
-    }));
+    eventosRes.rows.forEach(e => timeline.push({ fecha: e.fecha, tipo: 'sanitario',
+      descripcion: `${e.tipo_evento}${e.descripcion ? ' — ' + e.descripcion : ''}${e.tratamiento ? ' | Tto: ' + e.tratamiento : ''}${e.veterinario ? ' (Dr. ' + e.veterinario + ')' : ''}`,
+      monto: parseFloat(e.costo), icono: 'fa-syringe', color: '#ffad46' }));
 
-    vacunasRes.rows.forEach(v => timeline.push({
-      fecha: v.fecha, tipo: 'vacuna',
+    vacunasRes.rows.forEach(v => timeline.push({ fecha: v.fecha, tipo: 'vacuna',
       descripcion: `Vacuna: ${v.descripcion}`,
-      monto: 0, icono: 'fa-shield-alt', color: '#31ce36'
-    }));
+      monto: 0, icono: 'fa-shield-alt', color: '#31ce36' }));
 
-    // Pesajes
-    pesajesRes.rows.forEach(p => timeline.push({
-      fecha: p.fecha_pesaje, tipo: 'pesaje',
+    pesajesRes.rows.forEach(p => timeline.push({ fecha: p.fecha_pesaje, tipo: 'pesaje',
       descripcion: `Pesaje: ${parseFloat(p.peso).toFixed(2)} kg${p.observaciones ? ' — ' + p.observaciones : ''}`,
-      monto: 0, icono: 'fa-weight', color: '#6f42c1',
-      peso_momento: parseFloat(p.peso)
-    }));
+      monto: 0, icono: 'fa-weight', color: '#6f42c1', peso_momento: parseFloat(p.peso) }));
 
-    // Ciclos reproductivos
     ciclosRes.rows.forEach(c => {
-      if (c.fecha_celo) timeline.push({
-        fecha: c.fecha_celo, tipo: 'reproductivo',
-        descripcion: `Celo detectado — Ciclo #${c.numero_ciclo}`,
-        monto: 0, icono: 'fa-heart', color: '#e83e8c'
-      });
-      if (c.fecha_servicio) timeline.push({
-        fecha: c.fecha_servicio, tipo: 'reproductivo',
+      if (c.fecha_celo) timeline.push({ fecha: c.fecha_celo, tipo: 'reproductivo',
+        descripcion: `Celo detectado — Ciclo #${c.numero_ciclo}`, monto: 0, icono: 'fa-heart', color: '#e83e8c' });
+      if (c.fecha_servicio) timeline.push({ fecha: c.fecha_servicio, tipo: 'reproductivo',
         descripcion: `Servicio/Monta — Ciclo #${c.numero_ciclo}${c.verraco_id ? ' (Verraco: ' + c.verraco_id + ')' : ''}`,
-        monto: 0, icono: 'fa-venus-mars', color: '#e83e8c'
-      });
-      if (c.fecha_parto_real) timeline.push({
-        fecha: c.fecha_parto_real, tipo: 'reproductivo',
-        descripcion: `Parto — Ciclo #${c.numero_ciclo}: ${c.lechones_vivos || 0} vivos, ${c.lechones_muertos || 0} muertos${c.observaciones ? ' — ' + c.observaciones : ''}`,
-        monto: 0, icono: 'fa-baby', color: '#e83e8c'
-      });
+        monto: 0, icono: 'fa-venus-mars', color: '#e83e8c' });
+      if (c.fecha_parto_real) timeline.push({ fecha: c.fecha_parto_real, tipo: 'reproductivo',
+        descripcion: `Parto — Ciclo #${c.numero_ciclo}: ${c.lechones_vivos||0} vivos, ${c.lechones_muertos||0} muertos${c.observaciones ? ' — ' + c.observaciones : ''}`,
+        monto: 0, icono: 'fa-baby', color: '#e83e8c' });
     });
 
-    movimientosRes.rows.forEach(m => timeline.push({
-      fecha: m.fecha, tipo: 'movimiento',
-      descripcion: `Traslado: ${m.origen_nombre || '?'} -> ${m.destino_nombre || '?'}${m.motivo ? ' (' + m.motivo + ')' : ''}`,
+    movimientosRes.rows.forEach(m => timeline.push({ fecha: m.fecha, tipo: 'movimiento',
+      descripcion: `Traslado: ${m.origen_nombre||'?'} → ${m.destino_nombre||'?'}${m.motivo ? ' (' + m.motivo + ')' : ''}`,
       monto: 0, icono: 'fa-exchange-alt', color: '#6c757d',
-      costo_acumulado_momento: parseFloat(m.costo_acumulado_momento || 0),
-      peso_momento: m.peso_momento,
-      extra: m.observaciones
-    }));
+      costo_acumulado_momento: parseFloat(m.costo_acumulado_momento||0), peso_momento: m.peso_momento, extra: m.observaciones }));
 
-    ingresosRes.rows.forEach(i => timeline.push({
-      fecha: i.fecha, tipo: 'ingreso_venta',
-      descripcion: `${i.tipo}${i.descripcion ? ' - ' + i.descripcion : ''}${i.comprador ? ' (Comprador: ' + i.comprador + ')' : ''}${i.peso_venta ? ' | ' + i.peso_venta + ' kg' : ''}`,
-      monto: parseFloat(i.monto), icono: 'fa-hand-holding-usd', color: '#31ce36'
-    }));
+    ingresosRes.rows.forEach(i => timeline.push({ fecha: i.fecha, tipo: 'ingreso_venta',
+      descripcion: `${i.tipo||'Ingreso'}${i.descripcion ? ' - ' + i.descripcion : ''}${i.comprador ? ' (Comprador: ' + i.comprador + ')' : ''}${i.peso_venta ? ' | ' + i.peso_venta + ' kg' : ''}`,
+      monto: parseFloat(i.monto), icono: 'fa-hand-holding-usd', color: '#31ce36' }));
 
-    // Agrupar alimentacion por fecha para no saturar la linea de tiempo
     const alimentacionPorFecha = {};
     alimentacionRes.rows.forEach(a => {
-      const key = a.fecha instanceof Date ? a.fecha.toISOString().split('T')[0] : String(a.fecha).split('T')[0];
+      const key = String(a.fecha).split('T')[0];
       if (!alimentacionPorFecha[key]) alimentacionPorFecha[key] = { kg: 0, costo: 0, dietas: new Set() };
       alimentacionPorFecha[key].kg += parseFloat(a.kg_asignados);
       alimentacionPorFecha[key].costo += parseFloat(a.costo_asignado);
       if (a.dieta_nombre) alimentacionPorFecha[key].dietas.add(a.dieta_nombre);
     });
-    Object.entries(alimentacionPorFecha).forEach(([fecha, data]) => timeline.push({
-      fecha, tipo: 'alimentacion',
-      descripcion: `Alimentacion: ${data.kg.toFixed(2)} kg${data.dietas.size > 0 ? ' (' + [...data.dietas].join(', ') + ')' : ''}`,
-      monto: data.costo, icono: 'fa-utensils', color: '#20c997'
-    }));
+    Object.entries(alimentacionPorFecha).forEach(([fecha, data]) => timeline.push({ fecha, tipo: 'alimentacion',
+      descripcion: `Alimentación: ${data.kg.toFixed(2)} kg${data.dietas.size > 0 ? ' (' + [...data.dietas].join(', ') + ')' : ''}`,
+      monto: data.costo, icono: 'fa-utensils', color: '#20c997' }));
 
-    // Ordenar por fecha
     timeline.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
 
-    // Calcular totales
     const costoAlimentacion = alimentacionRes.rows.reduce((s, a) => s + parseFloat(a.costo_asignado), 0);
-    const costoTotal = parseFloat(animal.valor_compra || 0)
+    const costoTotal = parseFloat(animal.valor_compra||0)
       + gastosRes.rows.reduce((s, g) => s + parseFloat(g.monto), 0)
       + eventosRes.rows.reduce((s, e) => s + parseFloat(e.costo), 0)
       + costoAlimentacion;
-
     const ingresoTotal = ingresosRes.rows.reduce((s, i) => s + parseFloat(i.monto), 0);
 
-    // Cambios de categoría inferidos desde pesajes (primer y último)
     const pesoInicial = pesajesRes.rows.length > 0 ? parseFloat(pesajesRes.rows[0].peso) : null;
-    const pesoActual  = pesajesRes.rows.length > 0 ? parseFloat(pesajesRes.rows[pesajesRes.rows.length - 1].peso) : null;
-    const diasVida = animal.fecha_nacimiento
-      ? Math.round((Date.now() - new Date(animal.fecha_nacimiento).getTime()) / 86400000)
-      : null;
-    const gdp = (pesoInicial !== null && pesoActual !== null && diasVida && diasVida > 0)
-      ? ((pesoActual - pesoInicial) / diasVida).toFixed(3)
-      : null;
+    const pesoActual  = pesajesRes.rows.length > 0 ? parseFloat(pesajesRes.rows[pesajesRes.rows.length-1].peso) : null;
+    const diasVida = animal.fecha_nacimiento ? Math.round((Date.now() - new Date(animal.fecha_nacimiento).getTime()) / 86400000) : null;
+    const gdp = (pesoInicial !== null && pesoActual !== null && diasVida > 0)
+      ? ((pesoActual - pesoInicial) / diasVida).toFixed(3) : null;
 
     const resumen = {
-      valor_compra: parseFloat(animal.valor_compra || 0),
+      valor_compra: parseFloat(animal.valor_compra||0),
       gastos_directos: gastosRes.rows.reduce((s, g) => s + parseFloat(g.monto), 0),
       costos_sanitarios: eventosRes.rows.reduce((s, e) => s + parseFloat(e.costo), 0),
       costo_alimentacion: costoAlimentacion,
