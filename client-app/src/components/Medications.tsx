@@ -111,26 +111,46 @@ const Medications: React.FC = () => {
     if (!medForm.nombre.trim()) { setError('El nombre es requerido'); return; }
     setSubmitting(true); setError('');
     try {
-      const payload = {
+      const medPayload = {
         nombre: medForm.nombre, tipo: medForm.tipo,
         unidad_medida: medForm.unidad_medida,
         dias_retiro: parseInt(medForm.dias_retiro) || 0,
         dosis_recomendada: medForm.dosis_recomendada || null,
       };
-      if (editingMedId) {
-        await api.put(`/health/medications/${editingMedId}`, payload);
+      let medId = editingMedId;
+      if (medId) {
+        await api.put(`/health/medications/${medId}`, medPayload);
         setEditingMedNombre(medForm.nombre);
-        showOk('Medicamento actualizado');
       } else {
-        const res = await api.post('/health/medications', payload);
-        setEditingMedId(res.data.id);
+        const res = await api.post('/health/medications', medPayload);
+        medId = res.data.id;
+        setEditingMedId(medId);
         setEditingMedNombre(medForm.nombre);
-        await loadLotes(res.data.id);
-        showOk('Medicamento creado — ahora puedes agregar lotes');
       }
+      // Si hay datos de lote, guardarlo también
+      if (loteForm.numero_lote.trim() && loteForm.cantidad_inicial && loteForm.costo_unitario) {
+        const lotePayload = {
+          numero_lote: loteForm.numero_lote,
+          cantidad_inicial: parseFloat(loteForm.cantidad_inicial),
+          unidad_medida: loteForm.unidad_medida,
+          costo_unitario: parseFloat(loteForm.costo_unitario),
+          fecha_vencimiento: loteForm.fecha_vencimiento || null,
+          fecha_ingreso: loteForm.fecha_ingreso,
+          proveedor: loteForm.proveedor || null,
+        };
+        if (editingLoteId) {
+          await api.put(`/health/medications/${medId}/lots/${editingLoteId}`, { ...lotePayload, cantidad_actual: parseFloat(loteForm.cantidad_inicial), activo: true });
+        } else {
+          await api.post(`/health/medications/${medId}/lots`, lotePayload);
+        }
+        setEditingLoteId(null);
+        setLoteForm(emptyLoteForm);
+        await loadLotes(medId!);
+      }
+      showOk(editingMedId ? 'Guardado exitosamente' : 'Medicamento creado');
       loadMeds();
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Error guardando medicamento');
+      setError(err.response?.data?.error || 'Error guardando');
     } finally { setSubmitting(false); }
   };
 
@@ -394,115 +414,90 @@ const Medications: React.FC = () => {
               {error && <div className="alert alert-danger" style={{ marginBottom: 16 }}><i className="fas fa-exclamation-circle" style={{ marginRight: 8 }} />{error}</div>}
               {success && <div className="alert alert-success" style={{ marginBottom: 16 }}><i className="fas fa-check-circle" style={{ marginRight: 8 }} />{success}</div>}
 
-              {/* ── Sección 1: Datos básicos ── */}
-              <div style={{ marginBottom: 28 }}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: '#1572e8', marginBottom: 14, paddingBottom: 6, borderBottom: '2px solid #e8f4fd' }}>
-                  <i className="fas fa-info-circle" style={{ marginRight: 8 }} />Datos del Medicamento
+              <form onSubmit={handleMedSubmit}>
+                {/* ── Datos del medicamento ── */}
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#1572e8', marginBottom: 12, paddingBottom: 6, borderBottom: '2px solid #e8f4fd' }}>
+                  <i className="fas fa-pills" style={{ marginRight: 8 }} />Datos del Medicamento
                 </div>
-                <form onSubmit={handleMedSubmit}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 14 }}>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Nombre *</label>
-                      <input type="text" value={medForm.nombre} onChange={e => setMedForm({ ...medForm, nombre: e.target.value })} style={inp()} placeholder="Ej: Amoxicilina 500mg" required />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Tipo</label>
-                      <select value={medForm.tipo} onChange={e => setMedForm({ ...medForm, tipo: e.target.value })} style={inp()}>
-                        {TIPOS.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Unidad de medida</label>
-                      <select value={medForm.unidad_medida} onChange={e => setMedForm({ ...medForm, unidad_medida: e.target.value })} style={inp()}>
-                        {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Días de retiro</label>
-                      <input type="number" min="0" value={medForm.dias_retiro} onChange={e => setMedForm({ ...medForm, dias_retiro: e.target.value })} style={inp()} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Dosis recomendada</label>
-                      <input type="text" value={medForm.dosis_recomendada} onChange={e => setMedForm({ ...medForm, dosis_recomendada: e.target.value })} style={inp()} placeholder="Ej: 1ml/10kg" />
-                    </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Nombre *</label>
+                    <input type="text" value={medForm.nombre} onChange={e => setMedForm({ ...medForm, nombre: e.target.value })} style={inp()} placeholder="Ej: Amoxicilina 500mg" required />
                   </div>
-                  <button type="submit" className="btn btn-success" disabled={submitting}>
-                    <i className={`fas ${submitting ? 'fa-spinner fa-spin' : 'fa-save'}`} style={{ marginRight: 8 }} />
-                    {submitting ? 'Guardando...' : (editingMedId ? 'Actualizar datos' : 'Guardar y continuar')}
-                  </button>
-                </form>
-              </div>
-
-              {/* ── Sección 2: Lotes (solo si ya existe el medicamento) ── */}
-              {editingMedId && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 6, borderBottom: '2px solid #e8f4fd' }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: '#1572e8' }}>
-                      <i className="fas fa-layer-group" style={{ marginRight: 8 }} />Lotes de Inventario
-                    </div>
-                    <button className="btn btn-sm btn-primary" onClick={() => { setShowLoteForm(v => !v); setEditingLoteId(null); setLoteForm(emptyLoteForm); }}>
-                      <i className={`fas ${showLoteForm && !editingLoteId ? 'fa-times' : 'fa-plus'}`} style={{ marginRight: 6 }} />
-                      {showLoteForm && !editingLoteId ? 'Cancelar' : 'Nuevo Lote'}
-                    </button>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Tipo</label>
+                    <select value={medForm.tipo} onChange={e => setMedForm({ ...medForm, tipo: e.target.value })} style={inp()}>
+                      {TIPOS.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+                    </select>
                   </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Unidad de medida</label>
+                    <select value={medForm.unidad_medida} onChange={e => setMedForm({ ...medForm, unidad_medida: e.target.value })} style={inp()}>
+                      {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Días de retiro</label>
+                    <input type="number" min="0" value={medForm.dias_retiro} onChange={e => setMedForm({ ...medForm, dias_retiro: e.target.value })} style={inp()} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Dosis recomendada</label>
+                    <input type="text" value={medForm.dosis_recomendada} onChange={e => setMedForm({ ...medForm, dosis_recomendada: e.target.value })} style={inp()} placeholder="Ej: 1ml/10kg" />
+                  </div>
+                </div>
 
-                  {/* Formulario de lote */}
-                  {showLoteForm && (
-                    <form onSubmit={handleLoteSubmit} style={{ background: '#f8f9fa', borderRadius: 8, padding: 16, marginBottom: 16 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 12 }}>
-                        <div>
-                          <label style={{ display: 'block', marginBottom: 4, fontWeight: 600, fontSize: 13 }}>Nº Lote *</label>
-                          <input type="text" value={loteForm.numero_lote} onChange={e => setLoteForm({ ...loteForm, numero_lote: e.target.value })} style={inp()} placeholder="LOT-2025-001" required />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', marginBottom: 4, fontWeight: 600, fontSize: 13 }}>Cantidad *</label>
-                          <input type="number" step="0.001" min="0.001" value={loteForm.cantidad_inicial} onChange={e => setLoteForm({ ...loteForm, cantidad_inicial: e.target.value })} style={inp()} placeholder="0" required />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', marginBottom: 4, fontWeight: 600, fontSize: 13 }}>Unidad</label>
-                          <select value={loteForm.unidad_medida} onChange={e => setLoteForm({ ...loteForm, unidad_medida: e.target.value })} style={inp()}>
-                            {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', marginBottom: 4, fontWeight: 600, fontSize: 13 }}>Costo unitario *</label>
-                          <input type="number" step="0.0001" min="0" value={loteForm.costo_unitario} onChange={e => setLoteForm({ ...loteForm, costo_unitario: e.target.value })} style={inp()} placeholder="0.00" required />
-                          {loteForm.cantidad_inicial && loteForm.costo_unitario && (
-                            <small style={{ color: '#1572e8' }}>Total: ${(parseFloat(loteForm.cantidad_inicial) * parseFloat(loteForm.costo_unitario)).toFixed(2)}</small>
-                          )}
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', marginBottom: 4, fontWeight: 600, fontSize: 13 }}>Fecha ingreso</label>
-                          <input type="date" value={loteForm.fecha_ingreso} onChange={e => setLoteForm({ ...loteForm, fecha_ingreso: e.target.value })} style={inp()} />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', marginBottom: 4, fontWeight: 600, fontSize: 13 }}>Fecha vencimiento</label>
-                          <input type="date" value={loteForm.fecha_vencimiento} onChange={e => setLoteForm({ ...loteForm, fecha_vencimiento: e.target.value })} style={inp()} />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', marginBottom: 4, fontWeight: 600, fontSize: 13 }}>Proveedor</label>
-                          <input type="text" value={loteForm.proveedor} onChange={e => setLoteForm({ ...loteForm, proveedor: e.target.value })} style={inp()} placeholder="Nombre del proveedor" />
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button type="submit" className="btn btn-success btn-sm" disabled={submitting}>
-                          <i className={`fas ${submitting ? 'fa-spinner fa-spin' : 'fa-save'}`} style={{ marginRight: 6 }} />
-                          {submitting ? 'Guardando...' : (editingLoteId ? 'Actualizar lote' : 'Registrar lote')}
-                        </button>
-                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setShowLoteForm(false); setEditingLoteId(null); setLoteForm(emptyLoteForm); }}>Cancelar</button>
-                      </div>
-                    </form>
-                  )}
+                {/* ── Lote inicial ── */}
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#1572e8', marginBottom: 12, paddingBottom: 6, borderBottom: '2px solid #e8f4fd' }}>
+                  <i className="fas fa-layer-group" style={{ marginRight: 8 }} />
+                  {editingMedId ? 'Agregar Lote' : 'Lote Inicial'}
+                  <span style={{ fontWeight: 400, fontSize: 12, color: '#6c757d', marginLeft: 8 }}>(opcional)</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginBottom: 20 }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Nº Lote</label>
+                    <input type="text" value={loteForm.numero_lote} onChange={e => setLoteForm({ ...loteForm, numero_lote: e.target.value })} style={inp()} placeholder="LOT-2025-001" />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Cantidad</label>
+                    <input type="number" step="0.001" min="0" value={loteForm.cantidad_inicial} onChange={e => setLoteForm({ ...loteForm, cantidad_inicial: e.target.value })} style={inp()} placeholder="0" />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Unidad</label>
+                    <select value={loteForm.unidad_medida} onChange={e => setLoteForm({ ...loteForm, unidad_medida: e.target.value })} style={inp()}>
+                      {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Costo unitario</label>
+                    <input type="number" step="0.0001" min="0" value={loteForm.costo_unitario} onChange={e => setLoteForm({ ...loteForm, costo_unitario: e.target.value })} style={inp()} placeholder="0.00" />
+                    {loteForm.cantidad_inicial && loteForm.costo_unitario && (
+                      <small style={{ color: '#1572e8' }}>Total: ${(parseFloat(loteForm.cantidad_inicial) * parseFloat(loteForm.costo_unitario)).toFixed(2)}</small>
+                    )}
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Fecha ingreso</label>
+                    <input type="date" value={loteForm.fecha_ingreso} onChange={e => setLoteForm({ ...loteForm, fecha_ingreso: e.target.value })} style={inp()} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Fecha vencimiento</label>
+                    <input type="date" value={loteForm.fecha_vencimiento} onChange={e => setLoteForm({ ...loteForm, fecha_vencimiento: e.target.value })} style={inp()} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 5, fontWeight: 600, fontSize: 13 }}>Proveedor</label>
+                    <input type="text" value={loteForm.proveedor} onChange={e => setLoteForm({ ...loteForm, proveedor: e.target.value })} style={inp()} placeholder="Nombre del proveedor" />
+                  </div>
+                </div>
 
-                  {/* Tabla de lotes */}
-                  {lotes.length > 0 ? (
+                {/* ── Lotes existentes (solo al editar) ── */}
+                {editingMedId && lotes.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#6c757d', marginBottom: 10 }}>
+                      <i className="fas fa-history" style={{ marginRight: 8 }} />Lotes registrados
+                    </div>
                     <div className="table-responsive">
                       <table className="table table-sm">
                         <thead>
-                          <tr>
-                            <th>Nº Lote</th><th>Disponible</th><th>Unidad</th>
-                            <th>Costo unit.</th><th>Total</th><th>Vencimiento</th><th>Proveedor</th><th>Estado</th><th></th>
-                          </tr>
+                          <tr><th>Nº Lote</th><th>Disponible</th><th>Costo unit.</th><th>Vencimiento</th><th>Estado</th><th></th></tr>
                         </thead>
                         <tbody>
                           {lotes.map(l => {
@@ -512,27 +507,14 @@ const Medications: React.FC = () => {
                             return (
                               <tr key={l.id} style={{ opacity: (!l.activo || vencido || agotado) ? 0.55 : 1 }}>
                                 <td style={{ fontWeight: 600 }}>{l.numero_lote}</td>
-                                <td><span style={{ fontWeight: 700, color: agotado ? '#f25961' : '#31ce36' }}>{Number(l.cantidad_actual).toFixed(3)}</span></td>
-                                <td>{l.unidad_medida}</td>
+                                <td><span style={{ fontWeight: 700, color: agotado ? '#f25961' : '#31ce36' }}>{Number(l.cantidad_actual).toFixed(3)} {l.unidad_medida}</span></td>
                                 <td>${Number(l.costo_unitario).toFixed(4)}</td>
-                                <td>${(Number(l.cantidad_actual) * Number(l.costo_unitario)).toFixed(2)}</td>
-                                <td>
-                                  {l.fecha_vencimiento ? (
-                                    <span style={{ padding: '2px 7px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: vencColor(dias) + '22', color: vencColor(dias) }}>
-                                      {fmtDate(l.fecha_vencimiento)}{dias !== null && ` (${dias < 0 ? 'VENCIDO' : dias + 'd'})`}
-                                    </span>
-                                  ) : '-'}
-                                </td>
-                                <td>{l.proveedor || '-'}</td>
-                                <td>
-                                  {vencido ? <span style={{ color: '#f25961', fontWeight: 700, fontSize: 11 }}>VENCIDO</span>
-                                    : agotado ? <span style={{ color: '#f25961', fontWeight: 700, fontSize: 11 }}>AGOTADO</span>
-                                    : <span style={{ color: '#31ce36', fontWeight: 700, fontSize: 11 }}>ACTIVO</span>}
-                                </td>
+                                <td>{l.fecha_vencimiento ? <span style={{ padding: '2px 7px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: vencColor(dias) + '22', color: vencColor(dias) }}>{fmtDate(l.fecha_vencimiento)}{dias !== null && ` (${dias < 0 ? 'VENCIDO' : dias + 'd'})`}</span> : '-'}</td>
+                                <td>{vencido ? <span style={{ color: '#f25961', fontWeight: 700, fontSize: 11 }}>VENCIDO</span> : agotado ? <span style={{ color: '#f25961', fontWeight: 700, fontSize: 11 }}>AGOTADO</span> : <span style={{ color: '#31ce36', fontWeight: 700, fontSize: 11 }}>ACTIVO</span>}</td>
                                 <td>
                                   <div style={{ display: 'flex', gap: 4 }}>
-                                    <button className="btn btn-warning btn-sm" onClick={() => handleLoteEdit(l)}><i className="fas fa-edit" /></button>
-                                    <button className="btn btn-danger btn-sm" onClick={() => handleLoteDelete(l.id)}><i className="fas fa-trash" /></button>
+                                    <button type="button" className="btn btn-warning btn-sm" onClick={() => handleLoteEdit(l)}><i className="fas fa-edit" /></button>
+                                    <button type="button" className="btn btn-danger btn-sm" onClick={() => handleLoteDelete(l.id)}><i className="fas fa-trash" /></button>
                                   </div>
                                 </td>
                               </tr>
@@ -541,19 +523,18 @@ const Medications: React.FC = () => {
                         </tbody>
                       </table>
                     </div>
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: 24, color: '#6c757d', background: '#f8f9fa', borderRadius: 8 }}>
-                      <i className="fas fa-layer-group" style={{ fontSize: 32, marginBottom: 8, opacity: 0.4 }} />
-                      <p style={{ margin: 0 }}>No hay lotes registrados — agrega el primero</p>
-                    </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
 
-              {/* Pie del modal */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24, paddingTop: 16, borderTop: '1px solid #ebedf2' }}>
-                <button className="btn btn-secondary" onClick={closeModal}>Cerrar</button>
-              </div>
+                {/* ── Botones ── */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 16, borderTop: '1px solid #ebedf2' }}>
+                  <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancelar</button>
+                  <button type="submit" className="btn btn-success" disabled={submitting}>
+                    <i className={`fas ${submitting ? 'fa-spinner fa-spin' : 'fa-save'}`} style={{ marginRight: 8 }} />
+                    {submitting ? 'Guardando...' : 'Guardar'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>
