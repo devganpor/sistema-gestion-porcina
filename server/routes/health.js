@@ -15,8 +15,7 @@ router.get('/medications', authenticateToken, async (req, res) => {
 });
 
 router.post('/medications', authenticateToken, [
-  body('nombre').notEmpty(),
-  body('tipo').notEmpty()
+  body('nombre').notEmpty()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
