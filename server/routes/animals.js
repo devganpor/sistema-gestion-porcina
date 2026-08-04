@@ -262,7 +262,7 @@ router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const [animalRes, gastosRes, eventosRes, vacunasRes, movimientosRes, ingresosRes, alimentacionRes] = await Promise.all([
+    const [animalRes, gastosRes, eventosRes, vacunasRes, movimientosRes, ingresosRes, alimentacionRes, pesajesRes, ciclosRes] = await Promise.all([
       query(`
         SELECT a.*, r.nombre as raza_nombre, u.nombre as ubicacion_nombre
         FROM animales a
@@ -298,6 +298,19 @@ router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
         SELECT fecha, dieta_nombre, kg_asignados, costo_asignado, animales_en_ubicacion,
                ubicacion_id
         FROM alimentacion_animal WHERE animal_id = $1 ORDER BY fecha
+      `, [id]),
+      query(`
+        SELECT peso, fecha_pesaje, observaciones
+        FROM pesajes WHERE animal_id = $1 ORDER BY fecha_pesaje
+      `, [id]),
+      query(`
+        SELECT cr.numero_ciclo, cr.fecha_inicio, cr.fecha_celo, cr.fecha_servicio,
+               cr.fecha_parto_esperado, cr.fecha_parto_real,
+               cr.lechones_vivos, cr.lechones_muertos, cr.estado, cr.observaciones,
+               v.identificador_unico as verraco_id
+        FROM ciclos_reproductivos cr
+        LEFT JOIN animales v ON cr.verraco_id = v.id
+        WHERE cr.cerda_id = $1 ORDER BY cr.fecha_inicio
       `, [id])
     ]);
 
@@ -337,12 +350,40 @@ router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
       monto: 0, icono: 'fa-shield-alt', color: '#31ce36'
     }));
 
+    // Pesajes
+    pesajesRes.rows.forEach(p => timeline.push({
+      fecha: p.fecha_pesaje, tipo: 'pesaje',
+      descripcion: `Pesaje: ${parseFloat(p.peso).toFixed(2)} kg${p.observaciones ? ' — ' + p.observaciones : ''}`,
+      monto: 0, icono: 'fa-weight', color: '#6f42c1',
+      peso_momento: parseFloat(p.peso)
+    }));
+
+    // Ciclos reproductivos
+    ciclosRes.rows.forEach(c => {
+      if (c.fecha_celo) timeline.push({
+        fecha: c.fecha_celo, tipo: 'reproductivo',
+        descripcion: `Celo detectado — Ciclo #${c.numero_ciclo}`,
+        monto: 0, icono: 'fa-heart', color: '#e83e8c'
+      });
+      if (c.fecha_servicio) timeline.push({
+        fecha: c.fecha_servicio, tipo: 'reproductivo',
+        descripcion: `Servicio/Monta — Ciclo #${c.numero_ciclo}${c.verraco_id ? ' (Verraco: ' + c.verraco_id + ')' : ''}`,
+        monto: 0, icono: 'fa-venus-mars', color: '#e83e8c'
+      });
+      if (c.fecha_parto_real) timeline.push({
+        fecha: c.fecha_parto_real, tipo: 'reproductivo',
+        descripcion: `Parto — Ciclo #${c.numero_ciclo}: ${c.lechones_vivos || 0} vivos, ${c.lechones_muertos || 0} muertos${c.observaciones ? ' — ' + c.observaciones : ''}`,
+        monto: 0, icono: 'fa-baby', color: '#e83e8c'
+      });
+    });
+
     movimientosRes.rows.forEach(m => timeline.push({
       fecha: m.fecha, tipo: 'movimiento',
       descripcion: `Traslado: ${m.origen_nombre || '?'} -> ${m.destino_nombre || '?'}${m.motivo ? ' (' + m.motivo + ')' : ''}`,
       monto: 0, icono: 'fa-exchange-alt', color: '#6c757d',
       costo_acumulado_momento: parseFloat(m.costo_acumulado_momento || 0),
-      peso_momento: m.peso_momento
+      peso_momento: m.peso_momento,
+      extra: m.observaciones
     }));
 
     ingresosRes.rows.forEach(i => timeline.push({
@@ -378,12 +419,28 @@ router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
 
     const ingresoTotal = ingresosRes.rows.reduce((s, i) => s + parseFloat(i.monto), 0);
 
+    // Cambios de categoría inferidos desde pesajes (primer y último)
+    const pesoInicial = pesajesRes.rows.length > 0 ? parseFloat(pesajesRes.rows[0].peso) : null;
+    const pesoActual  = pesajesRes.rows.length > 0 ? parseFloat(pesajesRes.rows[pesajesRes.rows.length - 1].peso) : null;
+    const diasVida = animal.fecha_nacimiento
+      ? Math.round((Date.now() - new Date(animal.fecha_nacimiento).getTime()) / 86400000)
+      : null;
+    const gdp = (pesoInicial !== null && pesoActual !== null && diasVida && diasVida > 0)
+      ? ((pesoActual - pesoInicial) / diasVida).toFixed(3)
+      : null;
+
     const resumen = {
       valor_compra: parseFloat(animal.valor_compra || 0),
       gastos_directos: gastosRes.rows.reduce((s, g) => s + parseFloat(g.monto), 0),
       costos_sanitarios: eventosRes.rows.reduce((s, e) => s + parseFloat(e.costo), 0),
       costo_alimentacion: costoAlimentacion,
       kg_alimentacion_total: alimentacionRes.rows.reduce((s, a) => s + parseFloat(a.kg_asignados), 0),
+      total_pesajes: pesajesRes.rows.length,
+      peso_inicial: pesoInicial,
+      peso_actual: pesoActual,
+      ganancia_diaria_promedio: gdp,
+      total_ciclos: ciclosRes.rows.length,
+      total_movimientos: movimientosRes.rows.length,
       costo_total: costoTotal,
       ingreso_total: ingresoTotal,
       resultado: ingresoTotal - costoTotal

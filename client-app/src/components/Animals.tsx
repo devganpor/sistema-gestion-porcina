@@ -31,6 +31,7 @@ interface TraceEvent {
   color: string;
   costo_acumulado_momento?: number;
   peso_momento?: number;
+  extra?: string;
 }
 
 interface Trazabilidad {
@@ -45,6 +46,12 @@ interface Trazabilidad {
     costo_total: number;
     ingreso_total: number;
     resultado: number;
+    total_pesajes: number;
+    peso_inicial: number | null;
+    peso_actual: number | null;
+    ganancia_diaria_promedio: string | null;
+    total_ciclos: number;
+    total_movimientos: number;
   };
 }
 
@@ -928,84 +935,149 @@ const Animals: React.FC = () => {
       {/* Modal Trazabilidad */}
       {showTraceModal && (
         <div className="modal-overlay" onClick={() => setShowTraceModal(false)}>
-          <div className="modal-content" style={{ maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            <div className="card-header" style={{ background: 'linear-gradient(135deg, #6f42c1 0%, #4a148c 100%)', color: 'white' }}>
+          <div className="modal-content" style={{ maxWidth: '960px', maxHeight: '92vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="card-header" style={{ background: 'linear-gradient(135deg, #6f42c1 0%, #4a148c 100%)', color: 'white', position: 'sticky', top: 0, zIndex: 10 }}>
               <h5 className="card-title" style={{ color: 'white', margin: 0 }}>
-                <i className="fas fa-route" style={{ marginRight: '10px' }}></i>
-                Trazabilidad del Animal
+                <i className="fas fa-route" style={{ marginRight: '10px' }} />
+                Trazabilidad Completa del Animal
               </h5>
               <button onClick={() => setShowTraceModal(false)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'white' }}>
-                <i className="fas fa-times"></i>
+                <i className="fas fa-times" />
               </button>
             </div>
             <div style={{ padding: '25px' }}>
               {traceLoading && (
                 <div style={{ textAlign: 'center', padding: '40px' }}>
-                  <i className="fas fa-spinner fa-spin" style={{ fontSize: '32px', color: '#6f42c1' }}></i>
+                  <i className="fas fa-spinner fa-spin" style={{ fontSize: '32px', color: '#6f42c1' }} />
                   <p style={{ marginTop: '10px', color: '#6c757d' }}>Cargando trazabilidad...</p>
                 </div>
               )}
               {!traceLoading && traceData && (() => {
                 const { animal, timeline, resumen } = traceData;
                 const fmt = (n: number) => `$${n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+                const fmtDate = (s: string) => { const [y,m,d] = s.split('T')[0].split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('es-CO'); };
+
+                // Leyenda de tipos
+                const TIPOS_LABEL: Record<string, string> = {
+                  ingreso: 'Ingreso', gasto: 'Gasto', sanitario: 'Sanidad', vacuna: 'Vacuna',
+                  movimiento: 'Traslado', ingreso_venta: 'Venta', alimentacion: 'Alimentación',
+                  pesaje: 'Pesaje', reproductivo: 'Reproductivo'
+                };
+
                 return (
                   <div>
-                    {/* Info animal */}
-                    <div style={{ background: '#f8f9fa', borderRadius: '8px', padding: '16px', marginBottom: '20px', display: 'flex', gap: '30px', flexWrap: 'wrap' }}>
-                      <div><strong style={{ color: '#6c757d', fontSize: '12px' }}>ANIMAL</strong><div style={{ fontWeight: '700', fontSize: '18px' }}>{animal.identificador_unico}{animal.nombre ? ` — ${animal.nombre}` : ''}</div></div>
-                      <div><strong style={{ color: '#6c757d', fontSize: '12px' }}>CATEGORÍA</strong><div style={{ textTransform: 'capitalize' }}>{animal.categoria}</div></div>
-                      <div><strong style={{ color: '#6c757d', fontSize: '12px' }}>ESTADO</strong><div><span style={{ padding: '3px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: '600', background: animal.estado === 'activo' ? '#31ce36' : animal.estado === 'vendido' ? '#ffad46' : '#f25961', color: 'white', textTransform: 'capitalize' }}>{animal.estado}</span></div></div>
-                      <div><strong style={{ color: '#6c757d', fontSize: '12px' }}>UBICACIÓN ACTUAL</strong><div>{animal.ubicacion_nombre || '—'}</div></div>
-                      <div><strong style={{ color: '#6c757d', fontSize: '12px' }}>RAZA</strong><div>{animal.raza_nombre || '—'}</div></div>
+                    {/* Ficha del animal */}
+                    <div style={{ background: 'linear-gradient(135deg,#f8f0ff,#f0f4ff)', border: '1px solid #d4b8ff', borderRadius: '10px', padding: '16px', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', gap: '30px', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#6f42c1', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 6px' }}>
+                            <i className="fas fa-paw" style={{ color: 'white', fontSize: 22 }} />
+                          </div>
+                          <div style={{ fontWeight: 700, fontSize: 16 }}>{animal.identificador_unico}</div>
+                          {animal.nombre && <div style={{ color: '#6c757d', fontSize: 13 }}>{animal.nombre}</div>}
+                        </div>
+                        {[
+                          { label: 'Categoría', val: animal.categoria },
+                          { label: 'Sexo', val: animal.sexo },
+                          { label: 'Raza', val: animal.raza_nombre || '—' },
+                          { label: 'Ubicación actual', val: animal.ubicacion_nombre || '—' },
+                          { label: 'Estado', val: animal.estado },
+                          { label: 'Origen', val: animal.origen || '—' },
+                        ].map((f, i) => (
+                          <div key={i}>
+                            <div style={{ fontSize: 11, color: '#6c757d', fontWeight: 600, textTransform: 'uppercase' }}>{f.label}</div>
+                            <div style={{ fontWeight: 600, textTransform: 'capitalize', marginTop: 2 }}>{f.val}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
-                    {/* Resumen financiero */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+                    {/* KPIs en dos filas: financieros + productivos */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 10 }}>
                       {[
-                        { label: 'Valor Compra/Ingreso', value: resumen.valor_compra, color: '#1572e8' },
-                        { label: 'Gastos Directos', value: resumen.gastos_directos, color: '#f25961' },
-                        { label: 'Costos Sanitarios', value: resumen.costos_sanitarios, color: '#ffad46' },
-                        { label: `Alimentacion (${resumen.kg_alimentacion_total.toFixed(1)} kg)`, value: resumen.costo_alimentacion, color: '#20c997' },
-                        { label: 'COSTO TOTAL', value: resumen.costo_total, color: '#1a2035', bold: true },
-                        { label: 'Ingresos por Venta', value: resumen.ingreso_total, color: '#31ce36' },
-                        { label: resumen.resultado >= 0 ? 'GANANCIA' : 'PERDIDA', value: Math.abs(resumen.resultado), color: resumen.resultado >= 0 ? '#31ce36' : '#f25961', bold: true }
-                      ].map((item, i) => (
-                        <div key={i} style={{ background: 'white', border: `2px solid ${item.color}20`, borderRadius: '8px', padding: '14px', textAlign: 'center' }}>
-                          <div style={{ fontSize: '11px', color: '#6c757d', fontWeight: '600', marginBottom: '4px' }}>{item.label}</div>
-                          <div style={{ fontSize: item.bold ? '18px' : '16px', fontWeight: '700', color: item.color }}>{fmt(item.value)}</div>
+                        { label: 'Valor compra', value: fmt(resumen.valor_compra), color: '#1572e8' },
+                        { label: 'Gastos directos', value: fmt(resumen.gastos_directos), color: '#f25961' },
+                        { label: 'Costos sanidad', value: fmt(resumen.costos_sanitarios), color: '#ffad46' },
+                        { label: `Alimentación (${resumen.kg_alimentacion_total.toFixed(1)} kg)`, value: fmt(resumen.costo_alimentacion), color: '#20c997' },
+                        { label: 'COSTO TOTAL', value: fmt(resumen.costo_total), color: '#1a2035', bold: true },
+                        { label: 'Ingresos venta', value: fmt(resumen.ingreso_total), color: '#31ce36' },
+                        { label: resumen.resultado >= 0 ? '✓ GANANCIA' : '✗ PÉRDIDA', value: fmt(Math.abs(resumen.resultado)), color: resumen.resultado >= 0 ? '#31ce36' : '#f25961', bold: true },
+                      ].map((k, i) => (
+                        <div key={i} style={{ background: 'white', border: `2px solid ${k.color}30`, borderRadius: 8, padding: '12px 10px', textAlign: 'center' }}>
+                          <div style={{ fontSize: 10, color: '#6c757d', fontWeight: 600, marginBottom: 3 }}>{k.label}</div>
+                          <div style={{ fontSize: k.bold ? 16 : 14, fontWeight: 700, color: k.color }}>{k.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginBottom: 24 }}>
+                      {[
+                        { label: 'Pesajes', value: resumen.total_pesajes, color: '#6f42c1', suffix: '' },
+                        { label: 'Peso inicial', value: resumen.peso_inicial != null ? `${resumen.peso_inicial} kg` : '—', color: '#6f42c1', suffix: '' },
+                        { label: 'Peso actual', value: resumen.peso_actual != null ? `${resumen.peso_actual} kg` : '—', color: '#6f42c1', suffix: '' },
+                        { label: 'GDP promedio', value: resumen.ganancia_diaria_promedio ? `${resumen.ganancia_diaria_promedio} kg/d` : '—', color: '#6f42c1', suffix: '' },
+                        { label: 'Traslados', value: resumen.total_movimientos, color: '#17a2b8', suffix: '' },
+                        { label: 'Ciclos reprod.', value: resumen.total_ciclos, color: '#e83e8c', suffix: '' },
+                      ].map((k, i) => (
+                        <div key={i} style={{ background: '#f8f9fa', border: `1px solid ${k.color}30`, borderRadius: 8, padding: '12px 10px', textAlign: 'center' }}>
+                          <div style={{ fontSize: 10, color: '#6c757d', fontWeight: 600, marginBottom: 3 }}>{k.label}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: k.color }}>{k.value}</div>
                         </div>
                       ))}
                     </div>
 
+                    {/* Leyenda */}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+                      {Object.entries({
+                        ingreso:'#1572e8', gasto:'#f25961', sanitario:'#ffad46', vacuna:'#31ce36',
+                        movimiento:'#17a2b8', ingreso_venta:'#28a745', alimentacion:'#20c997',
+                        pesaje:'#6f42c1', reproductivo:'#e83e8c'
+                      }).map(([tipo, color]) => (
+                        <span key={tipo} style={{ display:'flex', alignItems:'center', gap:4, fontSize:11, color:'#6c757d' }}>
+                          <span style={{ width:10, height:10, borderRadius:'50%', background:color, display:'inline-block' }} />
+                          {TIPOS_LABEL[tipo]}
+                        </span>
+                      ))}
+                    </div>
+
                     {/* Línea de tiempo */}
-                    <h6 style={{ color: '#1a2035', marginBottom: '16px', fontWeight: '700' }}>
-                      <i className="fas fa-history" style={{ marginRight: '8px', color: '#6f42c1' }}></i>
-                      Línea de Vida del Animal
+                    <h6 style={{ color: '#1a2035', marginBottom: '14px', fontWeight: '700' }}>
+                      <i className="fas fa-history" style={{ marginRight: '8px', color: '#6f42c1' }} />
+                      Línea de Vida ({timeline.length} eventos)
                     </h6>
                     {timeline.length === 0 ? (
                       <div style={{ textAlign: 'center', color: '#6c757d', padding: '20px' }}>Sin eventos registrados</div>
                     ) : (
-                      <div style={{ position: 'relative', paddingLeft: '30px' }}>
-                        <div style={{ position: 'absolute', left: '14px', top: 0, bottom: 0, width: '2px', background: '#dee2e6' }}></div>
+                      <div style={{ position: 'relative', paddingLeft: '32px' }}>
+                        <div style={{ position: 'absolute', left: '15px', top: 0, bottom: 0, width: '2px', background: '#dee2e6' }} />
                         {timeline.map((ev, i) => (
-                          <div key={i} style={{ position: 'relative', marginBottom: '16px', display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
-                            <div style={{ position: 'absolute', left: '-22px', width: '28px', height: '28px', borderRadius: '50%', background: ev.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, zIndex: 1 }}>
-                              <i className={`fas ${ev.icono}`} style={{ color: 'white', fontSize: '11px' }}></i>
+                          <div key={i} style={{ position: 'relative', marginBottom: '12px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                            <div style={{ position: 'absolute', left: '-23px', width: '30px', height: '30px', borderRadius: '50%', background: ev.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, zIndex: 1, boxShadow: `0 2px 6px ${ev.color}55` }}>
+                              <i className={`fas ${ev.icono}`} style={{ color: 'white', fontSize: '11px' }} />
                             </div>
-                            <div style={{ background: '#f8f9fa', borderRadius: '8px', padding: '10px 14px', flex: 1, borderLeft: `3px solid ${ev.color}` }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '4px' }}>
-                                <div>
-                                  <span style={{ fontSize: '11px', color: '#6c757d', fontWeight: '600' }}>{new Date(ev.fecha).toLocaleDateString('es-CO')}</span>
-                                  <div style={{ fontWeight: '600', color: '#1a2035', marginTop: '2px' }}>{ev.descripcion}</div>
+                            <div style={{ background: 'white', borderRadius: '8px', padding: '10px 14px', flex: 1, borderLeft: `3px solid ${ev.color}`, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 4 }}>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                                    <span style={{ fontSize: 11, color: '#6c757d', fontWeight: 600 }}>{fmtDate(ev.fecha)}</span>
+                                    <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10, background: ev.color + '22', color: ev.color, fontWeight: 700 }}>{TIPOS_LABEL[ev.tipo] || ev.tipo}</span>
+                                  </div>
+                                  <div style={{ fontWeight: 600, color: '#1a2035', fontSize: 13 }}>{ev.descripcion}</div>
                                   {ev.tipo === 'movimiento' && ev.costo_acumulado_momento !== undefined && (
-                                    <div style={{ fontSize: '11px', color: '#6c757d', marginTop: '2px' }}>
-                                      Costo acumulado al momento: <strong>{fmt(ev.costo_acumulado_momento)}</strong>
-                                      {ev.peso_momento ? ` | Peso: ${ev.peso_momento} kg` : ''}
+                                    <div style={{ fontSize: 11, color: '#6c757d', marginTop: 3 }}>
+                                      <i className="fas fa-coins" style={{ marginRight: 4 }} />
+                                      Costo acumulado al traslado: <strong>{fmt(ev.costo_acumulado_momento)}</strong>
+                                      {ev.peso_momento ? <span style={{ marginLeft: 8 }}><i className="fas fa-weight" style={{ marginRight: 3 }} />{ev.peso_momento} kg</span> : ''}
+                                      {ev.extra ? <span style={{ marginLeft: 8, fontStyle: 'italic' }}>{ev.extra}</span> : ''}
+                                    </div>
+                                  )}
+                                  {ev.tipo === 'pesaje' && ev.peso_momento && (
+                                    <div style={{ fontSize: 11, color: '#6f42c1', marginTop: 3, fontWeight: 600 }}>
+                                      <i className="fas fa-weight" style={{ marginRight: 4 }} />{ev.peso_momento} kg
                                     </div>
                                   )}
                                 </div>
                                 {ev.monto > 0 && (
-                                  <span style={{ fontWeight: '700', color: ev.tipo === 'ingreso_venta' ? '#31ce36' : '#f25961', fontSize: '14px', whiteSpace: 'nowrap' }}>
+                                  <span style={{ fontWeight: 700, color: ev.tipo === 'ingreso_venta' ? '#28a745' : '#f25961', fontSize: 14, whiteSpace: 'nowrap', marginLeft: 8 }}>
                                     {ev.tipo === 'ingreso_venta' ? '+' : '-'}{fmt(ev.monto)}
                                   </span>
                                 )}
