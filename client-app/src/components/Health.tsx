@@ -29,6 +29,7 @@ const Health: React.FC = () => {
   const [vaccinations, setVaccinations] = useState<Vaccination[]>([]);
   const [animals, setAnimals] = useState<{id: number; identificador_unico: string; nombre: string}[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('eventos');
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState('evento');
@@ -54,55 +55,14 @@ const Health: React.FC = () => {
   
   const validateForm = (): boolean => {
     const newErrors: {[key: string]: string} = {};
-    
-    // Validaciones comunes
-    if (!formData.animal_id || formData.animal_id === '') {
-      newErrors.animal_id = 'Debe seleccionar un animal';
-    }
-    
-    if (!formData.fecha) {
-      newErrors.fecha = 'La fecha es requerida';
-    } else {
-      const fecha = new Date(formData.fecha);
-      const hoy = new Date();
-      if (fecha > hoy) {
-        newErrors.fecha = 'La fecha no puede ser futura';
-      }
-    }
-    
+    if (!formData.animal_id) newErrors.animal_id = 'Debe seleccionar un animal';
+    if (!formData.fecha) newErrors.fecha = 'La fecha es requerida';
     if (formType === 'evento') {
-      // Validaciones para eventos sanitarios
-      if (!formData.descripcion || formData.descripcion.trim() === '') {
-        newErrors.descripcion = 'La descripción es requerida';
-      }
-      
-      if (formData.costo && (isNaN(parseFloat(formData.costo)) || parseFloat(formData.costo) < 0)) {
-        newErrors.costo = 'El costo debe ser un número positivo';
-      }
+      if (!formData.descripcion.trim()) newErrors.descripcion = 'La descripción es requerida';
     } else {
-      // Validaciones para vacunaciones
-      if (!formData.vacuna || formData.vacuna === '') {
-        newErrors.vacuna = 'Debe seleccionar una vacuna';
-      }
-      
-      if (!formData.lote || formData.lote.trim() === '') {
-        newErrors.lote = 'El lote es requerido';
-      }
-      
-      if (!formData.responsable || formData.responsable.trim() === '') {
-        newErrors.responsable = 'El responsable es requerido';
-      }
-      
-      if (formData.proxima_dosis) {
-        const proximaDosis = new Date(formData.proxima_dosis);
-        const fechaAplicacion = new Date(formData.fecha);
-        if (proximaDosis <= fechaAplicacion) {
-          newErrors.proxima_dosis = 'La próxima dosis debe ser posterior a la fecha de aplicación';
-        }
-      }
+      if (!formData.vacuna.trim()) newErrors.vacuna = 'El nombre de la vacuna es requerido';
+      if (!formData.responsable.trim()) newErrors.responsable = 'El responsable es requerido';
     }
-    
-    console.log('Errores de validación:', newErrors);
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -133,21 +93,12 @@ const Health: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      console.log('Validación fallida:', errors);
-      return;
-    }
-    
-    setLoading(true);
+    if (!validateForm()) return;
+    setSubmitting(true);
     setErrors({});
-    
     try {
-      let submitData: any = {};
-      let endpoint = '';
-      
       if (formType === 'evento') {
-        submitData = {
+        const payload = {
           animal_id: parseInt(formData.animal_id),
           tipo_evento: formData.tipo_evento,
           fecha: formData.fecha,
@@ -156,41 +107,26 @@ const Health: React.FC = () => {
           veterinario: formData.veterinario || null,
           costo: formData.costo ? parseFloat(formData.costo) : null
         };
-        endpoint = '/health/events';
+        if (editingId) await api.put(`/health/events/${editingId}`, payload);
+        else await api.post('/health/events', payload);
       } else {
-        submitData = {
+        await api.post('/health/vaccinations', {
           animal_id: parseInt(formData.animal_id),
           vacuna: formData.vacuna,
           fecha_aplicacion: formData.fecha,
-          lote: formData.lote,
+          lote: formData.lote || null,
           proxima_dosis: formData.proxima_dosis || null,
           responsable: formData.responsable
-        };
-        endpoint = '/health/vaccinations';
+        });
       }
-      
-      let response;
-      if (editingId && formType === 'evento') {
-        response = await api.put(`/health/events/${editingId}`, submitData);
-      } else {
-        response = await api.post(endpoint, submitData);
-      }
-      console.log('Evento sanitario guardado:', response.data);
-      
       setSuccess(`${formType === 'evento' ? 'Evento sanitario' : 'Vacunación'} ${editingId ? 'actualizado' : 'registrado'} exitosamente`);
       resetForm();
       await loadHealthData();
-      
       setTimeout(() => setSuccess(''), 3000);
     } catch (error: any) {
-      console.error('Error guardando evento:', error);
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.data?.error || 
-                          error.message || 
-                          'Error guardando evento sanitario';
-      setErrors({ general: errorMessage });
+      setErrors({ general: error.response?.data?.error || error.response?.data?.message || 'Error guardando registro' });
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -238,6 +174,14 @@ const Health: React.FC = () => {
     });
   };
 
+  const parseDate = (s: string) => {
+    if (!s) return null;
+    const [y, m, d] = s.split('T')[0].split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+
+  const fmtDate = (s: string) => parseDate(s)?.toLocaleDateString() ?? '-';
+
   const getEventTypeColor = (tipo: string) => {
     switch (tipo) {
       case 'vacunacion': return '#31ce36';
@@ -274,13 +218,8 @@ const Health: React.FC = () => {
             <div style={{ display: 'flex', gap: '10px' }}>
               <select
                 value={formType}
-                onChange={(e) => setFormType(e.target.value)}
-                style={{
-                  padding: '8px 12px',
-                  border: '1px solid #ebedf2',
-                  borderRadius: '8px',
-                  fontSize: '14px'
-                }}
+                onChange={(e) => { setFormType(e.target.value); setShowForm(true); }}
+                style={{ padding: '8px 12px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px' }}
               >
                 <option value="evento">Evento Sanitario</option>
                 <option value="vacunacion">Vacunación</option>
@@ -304,6 +243,11 @@ const Health: React.FC = () => {
                 </h5>
               </div>
               <div style={{ padding: '20px' }}>
+                {errors.general && (
+                  <div className="alert alert-danger" style={{ marginBottom: '15px' }}>
+                    <i className="fas fa-exclamation-circle" style={{ marginRight: '8px' }}></i>{errors.general}
+                  </div>
+                )}
                 <form onSubmit={handleSubmit}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px', marginBottom: '15px' }}>
                     <div>
@@ -327,6 +271,7 @@ const Health: React.FC = () => {
                           </option>
                         ))}
                       </select>
+                      {errors.animal_id && <small style={{ color: '#f25961' }}>{errors.animal_id}</small>}
                     </div>
                     <div>
                       <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', color: '#1a2035' }}>Fecha *</label>
@@ -405,6 +350,7 @@ const Health: React.FC = () => {
                           }}
                           placeholder="Descripción del evento sanitario..."
                         />
+                        {errors.descripcion && <small style={{ color: '#f25961' }}>{errors.descripcion}</small>}
                       </div>
                       
                       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '15px', marginBottom: '15px' }}>
@@ -447,25 +393,24 @@ const Health: React.FC = () => {
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px', marginBottom: '15px' }}>
                         <div>
                           <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', color: '#1a2035' }}>Vacuna *</label>
-                          <select
+                          <input
+                            type="text"
+                            list="vacunas-list"
                             value={formData.vacuna}
                             onChange={(e) => setFormData({...formData, vacuna: e.target.value})}
-                            required
-                            style={{
-                              width: '100%',
-                              padding: '10px',
-                              border: '1px solid #ebedf2',
-                              borderRadius: '8px',
-                              fontSize: '14px'
-                            }}
-                          >
-                            <option value="">Seleccionar vacuna</option>
-                            <option value="triple">Triple (Cólera, Erisipela, Pasteurella)</option>
-                            <option value="circovirus">Circovirus</option>
-                            <option value="aftosa">Fiebre Aftosa</option>
-                            <option value="aujeszky">Aujeszky</option>
-                            <option value="parvovirus">Parvovirus</option>
-                          </select>
+                            style={{ width: '100%', padding: '10px', border: `1px solid ${errors.vacuna ? '#f25961' : '#ebedf2'}`, borderRadius: '8px', fontSize: '14px' }}
+                            placeholder="Nombre de la vacuna"
+                          />
+                          <datalist id="vacunas-list">
+                            <option value="Triple (Cólera, Erisipela, Pasteurella)" />
+                            <option value="Circovirus" />
+                            <option value="Fiebre Aftosa" />
+                            <option value="Aujeszky" />
+                            <option value="Parvovirus" />
+                            <option value="PRRS" />
+                            <option value="Influenza Porcina" />
+                          </datalist>
+                          {errors.vacuna && <small style={{ color: '#f25961' }}>{errors.vacuna}</small>}
                         </div>
                         <div>
                           <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', color: '#1a2035' }}>Lote *</label>
@@ -518,15 +463,16 @@ const Health: React.FC = () => {
                             }}
                             placeholder="Nombre del responsable"
                           />
+                          {errors.responsable && <small style={{ color: '#f25961' }}>{errors.responsable}</small>}
                         </div>
                       </div>
                     </>
                   )}
                   
                   <div style={{ display: 'flex', gap: '10px' }}>
-                    <button type="submit" className="btn btn-success">
-                      <i className="fas fa-save" style={{ marginRight: '8px' }}></i>
-                      Guardar
+                    <button type="submit" className="btn btn-success" disabled={submitting}>
+                      <i className={`fas ${submitting ? 'fa-spinner fa-spin' : 'fa-save'}`} style={{ marginRight: '8px' }}></i>
+                      {submitting ? 'Guardando...' : 'Guardar'}
                     </button>
                     <button type="button" className="btn btn-secondary" onClick={resetForm}>
                       Cancelar
@@ -646,7 +592,7 @@ const Health: React.FC = () => {
                             {event.tipo_evento}
                           </span>
                         </td>
-                        <td>{new Date(event.fecha).toLocaleDateString()}</td>
+                        <td>{fmtDate(event.fecha)}</td>
                         <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {event.descripcion}
                         </td>
@@ -701,9 +647,9 @@ const Health: React.FC = () => {
                       <tr key={v.id}>
                         <td style={{ fontWeight: '600' }}>{v.animal_identificador}</td>
                         <td>{v.vacuna}</td>
-                        <td>{new Date(v.fecha_aplicacion).toLocaleDateString()}</td>
+                        <td>{fmtDate(v.fecha_aplicacion)}</td>
                         <td>{v.lote || '-'}</td>
-                        <td>{v.proxima_dosis ? new Date(v.proxima_dosis).toLocaleDateString() : '-'}</td>
+                        <td>{v.proxima_dosis ? fmtDate(v.proxima_dosis) : '-'}</td>
                         <td>{v.responsable || '-'}</td>
                       </tr>
                     ))}
@@ -733,7 +679,7 @@ const Health: React.FC = () => {
                       <div style={{ fontSize: '14px', color: '#6c757d' }}>{upcomingVaccinations.length} animal(es) con dosis pendiente en los próximos 30 días</div>
                       {upcomingVaccinations.slice(0, 3).map((v, i) => (
                         <div key={i} style={{ fontSize: '13px', color: '#856404', marginTop: '4px' }}>
-                          • {v.identificador_unico} — {v.vacuna} el {new Date(v.proxima_dosis).toLocaleDateString()}
+                          • {v.identificador_unico} — {v.vacuna} el {fmtDate(v.proxima_dosis)}
                         </div>
                       ))}
                     </div>
@@ -756,7 +702,7 @@ const Health: React.FC = () => {
                       <div style={{ fontSize: '14px', color: '#6c757d' }}>{expiringMeds.length} medicamento(s) vencen en los próximos 60 días</div>
                       {expiringMeds.slice(0, 3).map((m, i) => (
                         <div key={i} style={{ fontSize: '13px', color: '#721c24', marginTop: '4px' }}>
-                          • {m.nombre} — vence {new Date(m.fecha_vencimiento).toLocaleDateString()}
+                          • {m.nombre} — vence {fmtDate(m.fecha_vencimiento)}
                         </div>
                       ))}
                     </div>
