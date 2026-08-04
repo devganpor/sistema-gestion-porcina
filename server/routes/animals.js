@@ -398,8 +398,8 @@ router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
 
     res.json({ animal, timeline, resumen, movimientos: movimientosRes.rows });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error obteniendo trazabilidad' });
+    console.error('TRAZABILIDAD ERROR:', error);
+    res.status(500).json({ error: error.message || 'Error obteniendo trazabilidad' });
   }
 });
 
