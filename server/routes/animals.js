@@ -275,8 +275,8 @@ router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
         FROM gastos WHERE animal_id = $1 ORDER BY fecha
       `, [id]),
       query(`
-        SELECT fecha, tipo_evento, descripcion, costo, veterinario
-        FROM eventos_sanitarios WHERE animal_id = $1 AND costo > 0 ORDER BY fecha
+        SELECT fecha, tipo_evento, descripcion, COALESCE(costo, 0) as costo, veterinario
+        FROM eventos_sanitarios WHERE animal_id = $1 ORDER BY fecha
       `, [id]),
       query(`
         SELECT fecha_aplicacion as fecha, vacuna as descripcion
