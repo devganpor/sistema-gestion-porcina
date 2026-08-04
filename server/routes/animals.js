@@ -71,55 +71,6 @@ router.post('/', authenticateToken, csrfProtection, [
   res.status(201).json({ message: 'Animal creado exitosamente', animal: result.rows[0] });
 }));
 
-router.get('/:id', authenticateToken, async (req, res) => {
-  try {
-    const result = await query(
-      `SELECT a.*, r.nombre as raza_nombre, u.nombre as ubicacion_nombre
-       FROM animales a
-       LEFT JOIN razas r ON a.raza_id = r.id
-       LEFT JOIN ubicaciones u ON a.ubicacion_actual_id = u.id
-       WHERE a.id = $1`,
-      [req.params.id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Animal no encontrado' });
-    res.json(result.rows[0]);
-  } catch (error) {
-    res.status(500).json({ error: 'Error obteniendo animal' });
-  }
-});
-
-router.put('/:id', authenticateToken, async (req, res) => {
-  try {
-    const allowedFields = [
-      'identificador_unico', 'nombre', 'sexo', 'raza_id', 'fecha_nacimiento',
-      'peso_nacimiento', 'madre_id', 'padre_id', 'categoria', 'ubicacion_actual_id',
-      'observaciones', 'estado', 'fecha_salida', 'motivo_salida',
-      'valor_compra', 'fecha_ingreso', 'origen'
-    ];
-
-    const filteredUpdates = {};
-    Object.keys(req.body).forEach(key => {
-      if (allowedFields.includes(key)) filteredUpdates[key] = req.body[key];
-    });
-
-    if (Object.keys(filteredUpdates).length === 0) {
-      return res.status(400).json({ error: 'No hay campos válidos para actualizar' });
-    }
-
-    const keys = Object.keys(filteredUpdates);
-    const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
-    const values = [...Object.values(filteredUpdates), req.params.id];
-
-    await query(
-      `UPDATE animales SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${values.length}`,
-      values
-    );
-    res.json({ message: 'Animal actualizado exitosamente' });
-  } catch (error) {
-    res.status(500).json({ error: 'Error actualizando animal' });
-  }
-});
-
 router.post('/bulk', authenticateToken, asyncHandler(async (req, res) => {
   const { animales } = req.body;
   if (!Array.isArray(animales) || animales.length === 0)
@@ -257,7 +208,6 @@ router.post('/bulk', authenticateToken, asyncHandler(async (req, res) => {
   res.json({ insertados: ok, errores: errCount, resultados: results });
 }));
 
-// GET /:id/trazabilidad — historial completo de costos del animal
 router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -487,6 +437,52 @@ router.post('/:id/movimiento', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error registrando movimiento' });
+  }
+});
+
+// GET /:id y PUT /:id van DESPUÉS de todas las subrutas para que Express no los capture primero
+router.get('/:id', authenticateToken, async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT a.*, r.nombre as raza_nombre, u.nombre as ubicacion_nombre
+       FROM animales a
+       LEFT JOIN razas r ON a.raza_id = r.id
+       LEFT JOIN ubicaciones u ON a.ubicacion_actual_id = u.id
+       WHERE a.id = $1`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Animal no encontrado' });
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: 'Error obteniendo animal' });
+  }
+});
+
+router.put('/:id', authenticateToken, async (req, res) => {
+  try {
+    const allowedFields = [
+      'identificador_unico', 'nombre', 'sexo', 'raza_id', 'fecha_nacimiento',
+      'peso_nacimiento', 'madre_id', 'padre_id', 'categoria', 'ubicacion_actual_id',
+      'observaciones', 'estado', 'fecha_salida', 'motivo_salida',
+      'valor_compra', 'fecha_ingreso', 'origen'
+    ];
+    const filteredUpdates = {};
+    Object.keys(req.body).forEach(key => {
+      if (allowedFields.includes(key)) filteredUpdates[key] = req.body[key];
+    });
+    if (Object.keys(filteredUpdates).length === 0) {
+      return res.status(400).json({ error: 'No hay campos válidos para actualizar' });
+    }
+    const keys = Object.keys(filteredUpdates);
+    const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+    const values = [...Object.values(filteredUpdates), req.params.id];
+    await query(
+      `UPDATE animales SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${values.length}`,
+      values
+    );
+    res.json({ message: 'Animal actualizado exitosamente' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error actualizando animal' });
   }
 });
 
