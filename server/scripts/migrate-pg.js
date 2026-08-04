@@ -391,8 +391,8 @@ async function createTables() {
         THEN ALTER TABLE ingresos RENAME COLUMN tipo_ingreso TO tipo; END IF;
       END $$;
     `);
-    // ingresos: agregar columna tipo si no existe (por si la tabla fue creada sin ella)
-    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ingresos' AND column_name='tipo') THEN ALTER TABLE ingresos ADD COLUMN tipo VARCHAR(100); UPDATE ingresos SET tipo = COALESCE(tipo_ingreso, 'Venta'); END IF; END $$;`);
+    // ingresos: agregar columna tipo si no existe y no hay tipo_ingreso tampoco
+    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ingresos' AND column_name='tipo') THEN ALTER TABLE ingresos ADD COLUMN tipo VARCHAR(100) DEFAULT 'Venta'; END IF; END $$;`);
     // pesajes: fecha -> fecha_pesaje
     await client.query(`
       DO $$ BEGIN
