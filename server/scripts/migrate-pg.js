@@ -210,13 +210,33 @@ async function createTables() {
         id SERIAL PRIMARY KEY,
         nombre VARCHAR(100) NOT NULL,
         tipo VARCHAR(50),
+        unidad_medida VARCHAR(20) DEFAULT 'ml',
         dias_retiro INTEGER DEFAULT 0,
         dosis_recomendada VARCHAR(100),
-        stock_actual INTEGER DEFAULT 0,
+        stock_actual DECIMAL(10,3) DEFAULT 0,
         fecha_vencimiento DATE,
+        costo_unitario DECIMAL(10,2) DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS medicamento_lotes (
+        id SERIAL PRIMARY KEY,
+        medicamento_id INTEGER REFERENCES medicamentos(id) ON DELETE CASCADE,
+        numero_lote VARCHAR(100) NOT NULL,
+        cantidad_inicial DECIMAL(10,3) NOT NULL,
+        cantidad_actual DECIMAL(10,3) NOT NULL,
+        unidad_medida VARCHAR(20) NOT NULL DEFAULT 'ml',
+        costo_unitario DECIMAL(10,4) NOT NULL DEFAULT 0,
+        fecha_vencimiento DATE,
+        fecha_ingreso DATE NOT NULL DEFAULT CURRENT_DATE,
+        proveedor VARCHAR(100),
+        activo BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_lotes_medicamento ON medicamento_lotes(medicamento_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_lotes_vencimiento ON medicamento_lotes(fecha_vencimiento)`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS eventos_sanitarios (
@@ -328,20 +348,17 @@ async function createTables() {
         THEN ALTER TABLE animales ADD COLUMN motivo_salida VARCHAR(255); END IF;
       END $$;
     `);
-    // eventos_sanitarios: agregar tratamiento si no existe (tabla creada antes de esta columna)
+    // eventos_sanitarios: agregar tratamiento si no existe
     await client.query(`
       DO $$ BEGIN
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eventos_sanitarios' AND column_name='tratamiento')
         THEN ALTER TABLE eventos_sanitarios ADD COLUMN tratamiento TEXT; END IF;
       END $$;
     `);
-    // medicamentos: agregar costo_unitario si no existe
-    await client.query(`
-      DO $$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medicamentos' AND column_name='costo_unitario')
-        THEN ALTER TABLE medicamentos ADD COLUMN costo_unitario DECIMAL(10,2) DEFAULT 0; END IF;
-      END $$;
-    `);
+    // medicamentos: columnas nuevas si no existen
+    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medicamentos' AND column_name='costo_unitario') THEN ALTER TABLE medicamentos ADD COLUMN costo_unitario DECIMAL(10,2) DEFAULT 0; END IF; END $$;`);
+    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medicamentos' AND column_name='unidad_medida') THEN ALTER TABLE medicamentos ADD COLUMN unidad_medida VARCHAR(20) DEFAULT 'ml'; END IF; END $$;`);
+    await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='medicamentos' AND column_name='stock_actual') THEN ALTER TABLE medicamentos ADD COLUMN stock_actual DECIMAL(10,3) DEFAULT 0; END IF; END $$;`);
     // gastos: fecha_gasto -> fecha
     await client.query(`
       DO $$ BEGIN
