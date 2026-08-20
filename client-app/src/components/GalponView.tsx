@@ -118,12 +118,12 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
       return <div style={{ fontSize: 9, color: '#aaa', textAlign: 'center', padding: '4px' }}>...</div>;
     }
     if (!animales || animales.length === 0) {
-      return <div style={{ fontSize: 9, color: '#ccc', textAlign: 'center', padding: '4px' }}>vacío</div>;
+      return <div style={{ fontSize: 9, color: '#ccc', textAlign: 'center', padding: '6px' }}>vacío</div>;
     }
     return (
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px', justifyContent: 'center', padding: '4px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', padding: '6px' }}>
         {animales.map(a => {
-          const size = pigSizeByWeight(a.peso_nacimiento, a.categoria);
+          const size = Math.max(pigSizeByWeight(a.peso_nacimiento, a.categoria), 18);
           const dotColor = HEALTH_COLOR[a.estado] || HEALTH_COLOR.default;
           const pigColor = a.sexo === 'hembra' ? '#f4829a' : '#5b9bd5';
           const isHovered = hoveredAnimal === a.identificador_unico;
@@ -131,7 +131,7 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
             <div
               key={a.id}
               title={`${a.identificador_unico}${a.nombre ? ' · ' + a.nombre : ''} · ${a.categoria} · ${a.estado}${a.observaciones ? '\n⚠ ' + a.observaciones : ''}`}
-              style={{ position: 'relative', filter: isHovered ? 'drop-shadow(0 0 3px #1572e8)' : 'none', transition: 'filter 0.15s' }}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', filter: isHovered ? 'drop-shadow(0 0 3px #1572e8)' : 'none', transition: 'filter 0.15s', cursor: 'pointer' }}
               onMouseEnter={() => setHoveredAnimal(a.identificador_unico)}
               onMouseLeave={() => setHoveredAnimal(null)}
               onClick={e => { e.stopPropagation(); setSelectedAnimal(a); setSelectedCorral(null); }}
@@ -143,7 +143,7 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
                 hasObs={showObs && !!a.observaciones}
               />
               {showIds && (
-                <div style={{ fontSize: 6, color: '#555', textAlign: 'center', lineHeight: 1, marginTop: 1, maxWidth: size + 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 6, color: '#555', textAlign: 'center', lineHeight: 1, marginTop: 1, width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {a.identificador_unico}
                 </div>
               )}
@@ -167,7 +167,7 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
         onMouseLeave={() => setHoveredCorral(null)}
         style={{
           flex: 1,
-          minHeight: 120,
+          minHeight: 160,
           border: isSelected ? '2px solid #1572e8' : isHovered ? '2px solid #6f42c1' : '1.5px solid #adb5bd',
           borderRadius: side === 'left' ? '6px 0 0 6px' : '0 6px 6px 0',
           background: isSelected ? '#f0f4ff' : isHovered ? '#f8f0ff' : '#fafafa',
