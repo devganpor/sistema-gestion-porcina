@@ -129,6 +129,7 @@ const NutritionComplete: React.FC = () => {
 
   // --- Planes ---
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [todasEtapas, setTodasEtapas] = useState<Etapa[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [planDetail, setPlanDetail] = useState<{ dias: DiaPlan[]; resumenEtapas: ResumenEtapa[] } | null>(null);
   const [planDetailTab, setPlanDetailTab] = useState<'dias' | 'resumen'>('resumen');
@@ -156,6 +157,20 @@ const NutritionComplete: React.FC = () => {
       setDiets(dietsRes.data);
       setPlans(plansRes.data);
       setCorrales(corralesRes.data.filter((u: any) => ['corral','maternidad','aislamiento'].includes(u.tipo)));
+      // Cargar etapas de todos los planes para auto-calcular cantidad
+      const etapasAll: Etapa[] = [];
+      await Promise.all(plansRes.data.map(async (p: Plan) => {
+        try {
+          const r = await api.get(`/nutrition/plans/${p.id}`);
+          etapasAll.push(...r.data.etapas.map((e: any) => ({
+            ...e,
+            fecha_inicio: e.fecha_inicio.split('T')[0],
+            fecha_fin: e.fecha_fin.split('T')[0],
+            cad_kg_animal: parseFloat(e.cad_kg_animal)
+          })));
+        } catch {}
+      }));
+      setTodasEtapas(etapasAll);
     } catch (error) {
       console.error('Error cargando datos:', error);
     } finally {
@@ -197,6 +212,26 @@ const NutritionComplete: React.FC = () => {
     } finally { setFeedingLoading(false); }
   };
 
+  // Auto-calcular cantidad cuando cambia corral o fecha usando etapas de planes
+  useEffect(() => {
+    if (!feedingForm.ubicacion_id || !feedingForm.fecha || todasEtapas.length === 0) return;
+    const corral = corrales.find(c => c.id === parseInt(feedingForm.ubicacion_id));
+    if (!corral) return;
+    const animales = Number(corral.animales_actuales);
+    if (animales === 0) return;
+    const fechaSel = new Date(feedingForm.fecha + 'T00:00:00');
+    const etapaActiva = todasEtapas.find(e => {
+      const ini = new Date(e.fecha_inicio + 'T00:00:00');
+      const fin = new Date(e.fecha_fin + 'T00:00:00');
+      return fechaSel >= ini && fechaSel <= fin;
+    });
+    if (etapaActiva) {
+      setFeedingForm(prev => ({ ...prev, cantidad_kg: (etapaActiva.cad_kg_animal * animales).toFixed(1) }));
+    }
+  }, [feedingForm.ubicacion_id, feedingForm.fecha, todasEtapas, corrales]); // eslint-disable-line
+
+  const corralSeleccionado = corrales.find(c => c.id === parseInt(feedingForm.ubicacion_id));
+
   // Calcular costo estimado en tiempo real
   const costoEstimado = (() => {
     const dieta = diets.find(d => d.id === parseInt(feedingForm.dieta_id));
@@ -204,8 +239,6 @@ const NutritionComplete: React.FC = () => {
     if (!dieta || isNaN(kg)) return null;
     return (parseFloat(dieta.costo_por_kg as any) * kg).toFixed(2);
   })();
-
-  const corralSeleccionado = corrales.find(c => c.id === parseInt(feedingForm.ubicacion_id));
 
   // ---- Dietas ----
   const handleSubmit = async (e: React.FormEvent) => {
