@@ -81,6 +81,7 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
   const [showIds, setShowIds] = useState(true);
   const [showDots, setShowDots] = useState(true);
   const [showObs, setShowObs] = useState(true);
+  const [filterSexo, setFilterSexo] = useState<'todos' | 'macho' | 'hembra'>('todos');
   const [hoveredCorral, setHoveredCorral] = useState<number | null>(null);
   const [hoveredAnimal, setHoveredAnimal] = useState<string | null>(null);
 
@@ -117,12 +118,13 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
     if (loadingCorrales.has(corralId)) {
       return <div style={{ fontSize: 9, color: '#aaa', textAlign: 'center', padding: '4px' }}>...</div>;
     }
-    if (!animales || animales.length === 0) {
-      return <div style={{ fontSize: 9, color: '#ccc', textAlign: 'center', padding: '6px' }}>vacío</div>;
+    const animalesFiltrados = filterSexo === 'todos' ? animales : animales.filter(a => a.sexo === filterSexo);
+    if (!animalesFiltrados || animalesFiltrados.length === 0) {
+      return <div style={{ fontSize: 9, color: '#ccc', textAlign: 'center', padding: '6px' }}>{animales.length > 0 ? 'sin coincidencias' : 'vacío'}</div>;
     }
     return (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', padding: '6px' }}>
-        {animales.map(a => {
+        {animalesFiltrados.map(a => {
           const size = Math.max(pigSizeByWeight(a.peso_nacimiento, a.categoria), 18);
           const dotColor = HEALTH_COLOR[a.estado] || HEALTH_COLOR.default;
           const pigColor = a.sexo === 'hembra' ? '#f4829a' : '#5b9bd5';
@@ -231,7 +233,7 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
               {galpon.etiqueta && <span style={{ marginLeft: 8, fontSize: 12, color: '#adb5bd' }}>{galpon.etiqueta}</span>}
             </div>
             <div style={{ color: '#adb5bd', fontSize: 12, marginTop: 2 }}>
-              {corrales.length} corrales · {corrales.reduce((s, c) => s + c.animales_actuales, 0)} animales
+              {corrales.length} corrales · {corrales.reduce((s, c) => s + Number(c.animales_actuales), 0)} animales
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -243,6 +245,14 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
             ].map(t => (
               <button key={t.label} onClick={t.toggle} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, border: 'none', cursor: 'pointer', fontWeight: 600, background: t.active ? '#1572e8' : 'rgba(255,255,255,0.15)', color: t.active ? 'white' : '#adb5bd', transition: 'all 0.15s' }}>
                 {t.label}
+              </button>
+            ))}
+            <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.2)', margin: '0 4px' }} />
+            {(['todos', 'hembra', 'macho'] as const).map(s => (
+              <button key={s} onClick={() => setFilterSexo(s)} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, border: 'none', cursor: 'pointer', fontWeight: 600, transition: 'all 0.15s',
+                background: filterSexo === s ? (s === 'hembra' ? '#f4829a' : s === 'macho' ? '#5b9bd5' : '#1572e8') : 'rgba(255,255,255,0.15)',
+                color: filterSexo === s ? 'white' : '#adb5bd' }}>
+                {s === 'todos' ? 'Todos' : s === 'hembra' ? '♀ Hembras' : '♂ Machos'}
               </button>
             ))}
             <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', fontSize: 18, cursor: 'pointer', borderRadius: 6, padding: '2px 8px', marginLeft: 8 }}>✕</button>
