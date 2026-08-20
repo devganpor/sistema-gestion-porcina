@@ -463,6 +463,7 @@ const NutritionComplete: React.FC = () => {
                   {showFeedingForm ? 'Cancelar' : 'Registrar Alimentación'}
                 </button>
               )}
+              {activeTab === 'planes' && selectedPlan && (
                 <button className="btn btn-secondary" onClick={() => { setSelectedPlan(null); setPlanDetail(null); }}>
                   <i className="fas fa-arrow-left" style={{ marginRight: '8px' }}></i>Volver a Planes
                 </button>
