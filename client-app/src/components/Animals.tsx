@@ -754,7 +754,7 @@ const Animals: React.FC = () => {
                       { icon: 'fa-weight', label: 'Peso Nacimiento', val: selectedAnimal.peso_nacimiento ? `${selectedAnimal.peso_nacimiento} kg` : '—', cap: false },
                       { icon: 'fa-sign-in-alt', label: 'Origen', val: selectedAnimal.origen === 'compra' ? 'Compra externa' : selectedAnimal.origen === 'nacimiento' ? 'Nacimiento en granja' : (selectedAnimal.origen || '—'), cap: false },
                       { icon: 'fa-calendar-check', label: 'Fecha Ingreso', val: selectedAnimal.fecha_ingreso ? new Date(selectedAnimal.fecha_ingreso).toLocaleDateString('es-EC') : '—', cap: false },
-                      { icon: 'fa-dollar-sign', label: 'Valor Compra / Ingreso', val: selectedAnimal.valor_compra ? `$${Number(selectedAnimal.valor_compra).toLocaleString('es-EC')}` : '—', cap: false },
+                      { icon: 'fa-dollar-sign', label: 'Valor Compra / Ingreso', val: selectedAnimal.valor_compra ? `$${Number(selectedAnimal.valor_compra).toFixed(3)}` : '—', cap: false },
                     ] as {icon:string;label:string;val:string;cap:boolean}[]).map((f, i) => (
                       <div key={i} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
                         <i className={`fas ${f.icon}`} style={{ color: '#6f42c1', marginTop: 2, width: 14, flexShrink: 0 }} />
@@ -987,7 +987,7 @@ const Animals: React.FC = () => {
               )}
               {!traceLoading && traceData && (() => {
                 const { animal, timeline, resumen } = traceData;
-                const fmt = (n: number) => `$${n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+                const fmt = (n: number) => `$${n.toFixed(3)}`;
                 const fmtDate = (s: string) => { const [y,m,d] = s.split('T')[0].split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('es-CO'); };
 
                 // Leyenda de tipos

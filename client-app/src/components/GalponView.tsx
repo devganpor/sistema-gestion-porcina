@@ -345,7 +345,7 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
                     ['Peso nac.', selectedAnimal.peso_nacimiento ? `${selectedAnimal.peso_nacimiento} kg` : '—'],
                     ['Nacimiento', selectedAnimal.fecha_nacimiento ? new Date(selectedAnimal.fecha_nacimiento).toLocaleDateString('es-EC') : '—'],
                     ['Ingreso', selectedAnimal.fecha_ingreso ? new Date(selectedAnimal.fecha_ingreso).toLocaleDateString('es-EC') : '—'],
-                    ['Valor compra', selectedAnimal.valor_compra ? `$${Number(selectedAnimal.valor_compra).toFixed(2)}` : '—'],
+                    ['Valor compra', selectedAnimal.valor_compra ? `$${Number(selectedAnimal.valor_compra).toFixed(3)}` : '—'],
                   ].map(([k, v]) => (
                     <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #e9ecef', fontSize: 13 }}>
                       <span style={{ color: '#6c757d', fontWeight: 600 }}>{k}</span>

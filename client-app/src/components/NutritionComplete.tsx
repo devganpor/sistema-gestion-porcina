@@ -315,7 +315,7 @@ const NutritionComplete: React.FC = () => {
     const dieta = diets.find(d => d.id === parseInt(feedingForm.dieta_id));
     const kg = parseFloat(feedingForm.cantidad_kg);
     if (!dieta || isNaN(kg)) return null;
-    return (parseFloat(dieta.costo_por_kg as any) * kg).toFixed(2);
+    return (parseFloat(dieta.costo_por_kg as any) * kg).toFixed(3);
   })();
 
   // ---- Dietas ----
@@ -657,7 +657,7 @@ const NutritionComplete: React.FC = () => {
                 </div>
                 <div style={{ background: '#f8f9fa', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
                   <div style={{ fontSize: '28px', fontWeight: '700', color: '#31ce36' }}>
-                    {diets.length > 0 ? (diets.reduce((acc, d) => acc + (parseFloat(d.costo_por_kg as any) || 0), 0) / diets.length).toFixed(0) : 0}
+                    {diets.length > 0 ? (diets.reduce((acc, d) => acc + (parseFloat(d.costo_por_kg as any) || 0), 0) / diets.length).toFixed(3) : '0.000'}
                   </div>
                   <div style={{ fontSize: '14px', color: '#6c757d', fontWeight: '600' }}>COSTO PROMEDIO/KG</div>
                 </div>
@@ -690,7 +690,7 @@ const NutritionComplete: React.FC = () => {
                             {diet.categoria_animal || '-'}
                           </span>
                         </td>
-                        <td>${parseFloat(diet.costo_por_kg as any || 0).toLocaleString()}</td>
+                        <td>${parseFloat(diet.costo_por_kg as any || 0).toFixed(3)}</td>
                         <td>{diet.proteina_porcentaje != null ? `${diet.proteina_porcentaje}%` : '-'}</td>
                         <td>{diet.energia_kcal != null ? diet.energia_kcal : '-'}</td>
                         <td>
@@ -1116,7 +1116,7 @@ const NutritionComplete: React.FC = () => {
                           <select value={feedingForm.dieta_id} onChange={e => setFeedingForm({...feedingForm, dieta_id: e.target.value})} style={inp()} required>
                             <option value="">— Seleccionar dieta —</option>
                             {diets.map(d => (
-                              <option key={d.id} value={d.id}>{d.nombre} ({d.categoria_animal}) — ${parseFloat(d.costo_por_kg as any).toLocaleString()}/kg</option>
+                              <option key={d.id} value={d.id}>{d.nombre} ({d.categoria_animal}) — ${parseFloat(d.costo_por_kg as any).toFixed(3)}/kg</option>
                             ))}
                           </select>
                         </div>
@@ -1132,7 +1132,7 @@ const NutritionComplete: React.FC = () => {
                           {[
                             { label: 'Animales en corral', val: Number(corralSeleccionado?.animales_actuales || 0), color: '#1572e8' },
                             { label: 'Kg por animal', val: corralSeleccionado && Number(corralSeleccionado.animales_actuales) > 0 ? (parseFloat(feedingForm.cantidad_kg) / Number(corralSeleccionado.animales_actuales)).toFixed(3) + ' kg' : '—', color: '#31ce36' },
-                            { label: 'Costo estimado', val: costoEstimado ? `$${parseFloat(costoEstimado).toLocaleString()}` : '—', color: '#ffad46' },
+                            { label: 'Costo estimado', val: costoEstimado ? `$${parseFloat(costoEstimado).toFixed(3)}` : '—', color: '#ffad46' },
                           ].map(kpi => (
                             <div key={kpi.label} style={{ textAlign: 'center' }}>
                               <div style={{ fontSize: '20px', fontWeight: '700', color: kpi.color }}>{kpi.val}</div>
@@ -1215,7 +1215,7 @@ const NutritionComplete: React.FC = () => {
                     {[
                       { label: 'Registros', val: registros.length, color: '#1572e8', icon: 'fa-list' },
                       { label: 'Total kg', val: registros.reduce((s,r) => s + parseFloat(r.cantidad_kg||0), 0).toFixed(1) + ' kg', color: '#31ce36', icon: 'fa-weight' },
-                      { label: 'Costo total', val: '$' + registros.reduce((s,r) => s + parseFloat(r.costo_total||0), 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}), color: '#ffad46', icon: 'fa-dollar-sign' },
+                      { label: 'Costo total', val: '$' + registros.reduce((s,r) => s + parseFloat(r.costo_total||0), 0).toFixed(3), color: '#ffad46', icon: 'fa-dollar-sign' },
                       { label: 'Corrales', val: new Set(registros.map(r => r.ubicacion_id)).size, color: '#6f42c1', icon: 'fa-door-open' },
                     ].map(kpi => (
                       <div key={kpi.label} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '14px', textAlign: 'center' }}>
@@ -1251,7 +1251,7 @@ const NutritionComplete: React.FC = () => {
                               <td><span style={{ background: '#e8f4fd', color: '#1572e8', borderRadius: '10px', padding: '2px 8px', fontSize: '12px', fontWeight: '600' }}>{r.dieta_nombre}</span></td>
                               <td style={{ fontWeight: '700', color: '#1572e8' }}>{parseFloat(r.cantidad_kg).toFixed(1)} kg</td>
                               <td style={{ color: '#31ce36', fontWeight: '600' }}>{kgAnimal}{kgAnimal !== '—' ? ' kg' : ''}</td>
-                              <td style={{ fontWeight: '600', color: '#ffad46' }}>${parseFloat(r.costo_total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                              <td style={{ fontWeight: '600', color: '#ffad46' }}>${parseFloat(r.costo_total||0).toFixed(3)}</td>
                               <td style={{ color: '#6c757d' }}>{r.responsable_nombre}</td>
                               <td style={{ color: '#6c757d', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.observaciones || '—'}</td>
                               <td>
@@ -1296,7 +1296,7 @@ const NutritionComplete: React.FC = () => {
                               { label: 'Cantidad total', val: `${parseFloat(viewRegistro.cantidad_kg).toFixed(1)} kg` },
                               { label: 'Animales en corral', val: animales || '—' },
                               { label: 'Kg por animal', val: kgAnimal !== '—' ? `${kgAnimal} kg` : '—' },
-                              { label: 'Costo total', val: `$${parseFloat(viewRegistro.costo_total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}` },
+                              { label: 'Costo total', val: `$${parseFloat(viewRegistro.costo_total||0).toFixed(3)}` },
                               { label: 'Responsable', val: viewRegistro.responsable_nombre },
                             ].map(({ label, val }) => (
                               <div key={label} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '10px 12px' }}>
