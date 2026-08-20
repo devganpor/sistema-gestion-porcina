@@ -31,6 +31,67 @@ router.get('/kpis', authenticateToken, asyncHandler(async (req, res) => {
   });
 }));
 
+router.get('/costs', authenticateToken, asyncHandler(async (req, res) => {
+  const [alimentacion, animales, sanidad, gastos, alimentacionMes, animalesMes, sanidadMes, gastosMes] = await Promise.all([
+    // Alimentacion total acumulada (deduplicada)
+    query(`
+      SELECT COALESCE(SUM(sub.cantidad_kg * sub.costo_por_kg), 0) as total
+      FROM (
+        SELECT DISTINCT ON (ra.ubicacion_id, ra.fecha_suministro)
+          ra.cantidad_kg, d.costo_por_kg
+        FROM registro_alimentacion ra
+        JOIN dietas d ON ra.dieta_id = d.id
+        ORDER BY ra.ubicacion_id, ra.fecha_suministro, ra.id DESC
+      ) sub
+    `),
+    // Valor compra animales activos + vendidos
+    query(`SELECT COALESCE(SUM(valor_compra), 0) as total FROM animales WHERE valor_compra > 0`),
+    // Costos sanitarios: eventos + vacunaciones (costo) + medicamentos usados
+    query(`
+      SELECT
+        COALESCE((SELECT SUM(costo) FROM eventos_sanitarios WHERE costo > 0), 0) +
+        COALESCE((SELECT SUM(costo_aplicacion) FROM vacunaciones WHERE costo_aplicacion > 0), 0)
+      AS total
+    `),
+    // Gastos directos registrados en tabla gastos
+    query(`SELECT COALESCE(SUM(monto), 0) as total FROM gastos`),
+    // Alimentacion mes actual
+    query(`
+      SELECT COALESCE(SUM(sub.cantidad_kg * sub.costo_por_kg), 0) as total
+      FROM (
+        SELECT DISTINCT ON (ra.ubicacion_id, ra.fecha_suministro)
+          ra.cantidad_kg, d.costo_por_kg
+        FROM registro_alimentacion ra
+        JOIN dietas d ON ra.dieta_id = d.id
+        WHERE ra.fecha_suministro >= DATE_TRUNC('month', CURRENT_DATE)
+        ORDER BY ra.ubicacion_id, ra.fecha_suministro, ra.id DESC
+      ) sub
+    `),
+    // Animales comprados este mes
+    query(`SELECT COALESCE(SUM(valor_compra), 0) as total FROM animales WHERE valor_compra > 0 AND fecha_ingreso >= DATE_TRUNC('month', CURRENT_DATE)`),
+    // Sanidad este mes
+    query(`
+      SELECT
+        COALESCE((SELECT SUM(costo) FROM eventos_sanitarios WHERE costo > 0 AND fecha >= DATE_TRUNC('month', CURRENT_DATE)), 0) +
+        COALESCE((SELECT SUM(costo_aplicacion) FROM vacunaciones WHERE costo_aplicacion > 0 AND fecha_aplicacion >= DATE_TRUNC('month', CURRENT_DATE)), 0)
+      AS total
+    `),
+    // Gastos directos este mes
+    query(`SELECT COALESCE(SUM(monto), 0) as total FROM gastos WHERE fecha >= DATE_TRUNC('month', CURRENT_DATE)`)
+  ]);
+
+  const costos = [
+    { categoria: 'Alimentación',   total: parseFloat(alimentacion.rows[0].total),   mes: parseFloat(alimentacionMes.rows[0].total),   icon: 'fa-utensils',      color: '#20c997' },
+    { categoria: 'Compra animales',total: parseFloat(animales.rows[0].total),        mes: parseFloat(animalesMes.rows[0].total),        icon: 'fa-paw',           color: '#1572e8' },
+    { categoria: 'Sanidad',        total: parseFloat(sanidad.rows[0].total),         mes: parseFloat(sanidadMes.rows[0].total),         icon: 'fa-syringe',       color: '#ffad46' },
+    { categoria: 'Gastos directos',total: parseFloat(gastos.rows[0].total),          mes: parseFloat(gastosMes.rows[0].total),          icon: 'fa-receipt',       color: '#f25961' },
+  ];
+  const totalAcumulado = costos.reduce((s, c) => s + c.total, 0);
+  const totalMes       = costos.reduce((s, c) => s + c.mes,   0);
+
+  res.json({ costos, totalAcumulado, totalMes });
+}));
+
 router.get('/alerts', authenticateToken, asyncHandler(async (req, res) => {
   const alerts = [];
 
