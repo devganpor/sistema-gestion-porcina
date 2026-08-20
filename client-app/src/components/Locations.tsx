@@ -468,40 +468,36 @@ const Locations: React.FC = () => {
                           <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>{u.granja_nombre}</div>
                         )}
                         {(() => {
-                          const animalesAgregados = u.tipo === 'granja'
-                            ? ubicaciones.filter(x => x.tipo === 'galpon' && x.granja_id === u.id)
-                                .reduce((s, g) => s + ubicaciones.filter(x => x.tipo === 'corral' && x.galpon_id === g.id)
-                                  .reduce((ss, c) => ss + Number(c.animales_actuales), 0), 0)
+                          const corralesDeGalpon = (gId: number) => ubicaciones.filter(x => x.tipo === 'corral' && x.galpon_id === gId);
+                          const galponesDe = (grId: number) => ubicaciones.filter(x => x.tipo === 'galpon' && x.granja_id === grId);
+                          const animales = u.tipo === 'granja'
+                            ? galponesDe(u.id).reduce((s, g) => s + corralesDeGalpon(g.id).reduce((ss, c) => ss + Number(c.animales_actuales), 0), 0)
                             : u.tipo === 'galpon'
-                              ? ubicaciones.filter(x => x.tipo === 'corral' && x.galpon_id === u.id)
-                                  .reduce((s, c) => s + Number(c.animales_actuales), 0)
+                              ? corralesDeGalpon(u.id).reduce((s, c) => s + Number(c.animales_actuales), 0)
                               : Number(u.animales_actuales);
+                          const capacidad = u.tipo === 'granja'
+                            ? galponesDe(u.id).reduce((s, g) => s + corralesDeGalpon(g.id).reduce((ss, c) => ss + Number(c.capacidad_maxima || 0), 0), 0)
+                            : u.tipo === 'galpon'
+                              ? corralesDeGalpon(u.id).reduce((s, c) => s + Number(c.capacidad_maxima || 0), 0)
+                              : Number(u.capacidad_maxima || 0);
+                          const pct = capacidad > 0 ? Math.round((animales / capacidad) * 100) : 0;
                           return (
-                            <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
-                              {u.tipo !== 'corral' ? `${animalesAgregados} animales (total corrales)` :
-                                u.capacidad_maxima
-                                  ? `${u.animales_actuales}/${u.capacidad_maxima} · ${Math.round((Number(u.animales_actuales) / u.capacidad_maxima) * 100)}%`
-                                  : `${u.animales_actuales} animales`
-                              }
-                            </div>
+                            <>
+                              <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                                {u.tipo !== 'corral'
+                                  ? `${animales} animales · cap. ${capacidad}`
+                                  : capacidad > 0 ? `${animales}/${capacidad} · ${pct}%` : `${animales} animales`
+                                }
+                              </div>
+                              {capacidad > 0 && (
+                                <span style={{ display: 'inline-block', marginTop: 4, padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, backgroundColor: getOcupacionColor(animales, capacidad), color: '#fff' }}>
+                                  {animales}/{capacidad} · {pct}%
+                                </span>
+                              )}
+                            </>
                           );
                         })()}
                       </div>
-
-                      {/* Badge ocupación */}
-                      {u.capacidad_maxima > 0 && (
-                        <span style={{
-                          padding: '2px 8px',
-                          borderRadius: 12,
-                          fontSize: 11,
-                          fontWeight: 600,
-                          backgroundColor: getOcupacionColor(u.animales_actuales, u.capacidad_maxima),
-                          color: '#fff',
-                          flexShrink: 0,
-                        }}>
-                          {u.animales_actuales}/{u.capacidad_maxima}
-                        </span>
-                      )}
 
                       {/* Acciones */}
                       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
