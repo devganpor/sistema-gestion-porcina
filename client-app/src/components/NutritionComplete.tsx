@@ -128,6 +128,11 @@ const NutritionComplete: React.FC = () => {
   const [filtroFechaInicio, setFiltroFechaInicio] = useState('2026-07-31');
   const [filtroFechaFin, setFiltroFechaFin] = useState(today);
   const [filtroCorral, setFiltroCorral] = useState('');
+  const [sortCol, setSortCol] = useState('fecha_suministro');
+  const [sortDir, setSortDir] = useState<'asc'|'desc'>('desc');
+  const [viewRegistro, setViewRegistro] = useState<any|null>(null);
+  const [editRegistro, setEditRegistro] = useState<any|null>(null);
+  const [editForm, setEditForm] = useState({ dieta_id: '', cantidad_kg: '', observaciones: '' });
 
   // --- Planes ---
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -260,6 +265,50 @@ const NutritionComplete: React.FC = () => {
   }, [feedingForm.ubicacion_id, feedingForm.fecha, todasEtapas, corrales]); // eslint-disable-line
 
   const corralSeleccionado = corrales.find(c => c.id === parseInt(feedingForm.ubicacion_id));
+
+  const handleSort = (col: string) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('asc'); }
+  };
+
+  const sortIcon = (col: string) => (
+    <i className={`fas fa-sort${sortCol === col ? (sortDir === 'asc' ? '-up' : '-down') : ''}`}
+      style={{ marginLeft: '5px', fontSize: '11px', opacity: sortCol === col ? 1 : 0.35 }} />
+  );
+
+  const registrosOrdenados = [...registros].sort((a, b) => {
+    let va: any, vb: any;
+    if (sortCol === 'fecha_suministro') { va = a.fecha_suministro; vb = b.fecha_suministro; }
+    else if (sortCol === 'ubicacion_nombre') { va = a.ubicacion_nombre; vb = b.ubicacion_nombre; }
+    else if (sortCol === 'dieta_nombre') { va = a.dieta_nombre; vb = b.dieta_nombre; }
+    else if (sortCol === 'cantidad_kg') { va = parseFloat(a.cantidad_kg); vb = parseFloat(b.cantidad_kg); }
+    else if (sortCol === 'costo_total') { va = parseFloat(a.costo_total||0); vb = parseFloat(b.costo_total||0); }
+    else if (sortCol === 'responsable_nombre') { va = a.responsable_nombre; vb = b.responsable_nombre; }
+    else { va = a[sortCol]; vb = b[sortCol]; }
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const handleEditRegistro = (r: any) => {
+    setEditRegistro(r);
+    setEditForm({ dieta_id: r.dieta_id?.toString() || '', cantidad_kg: parseFloat(r.cantidad_kg).toFixed(1), observaciones: r.observaciones || '' });
+  };
+
+  const handleSaveEditRegistro = async () => {
+    if (!editForm.dieta_id || !editForm.cantidad_kg) { alert('Completa dieta y cantidad'); return; }
+    try {
+      await api.put(`/nutrition/feeding/${editRegistro.id}`, {
+        dieta_id: parseInt(editForm.dieta_id),
+        cantidad_kg: parseFloat(editForm.cantidad_kg),
+        observaciones: editForm.observaciones || null
+      });
+      setEditRegistro(null);
+      setSuccess('Registro actualizado');
+      loadRegistros();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch { alert('Error actualizando registro'); }
+  };
 
   // Calcular costo estimado en tiempo real
   const costoEstimado = (() => {
@@ -1177,35 +1226,47 @@ const NutritionComplete: React.FC = () => {
                     ))}
                   </div>
                   <div className="table-responsive">
-                    <table className="table">
+                    <table className="table" style={{ fontSize: '13px' }}>
                       <thead>
                         <tr style={{ background: '#f8f9fa' }}>
-                          <th>Fecha</th><th>Corral</th><th>Dieta</th><th>Cantidad</th><th>Kg/animal</th><th>Costo total</th><th>Responsable</th><th>Obs.</th><th></th>
+                          <th onClick={() => handleSort('fecha_suministro')} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>Fecha{sortIcon('fecha_suministro')}</th>
+                          <th onClick={() => handleSort('ubicacion_nombre')} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>Corral{sortIcon('ubicacion_nombre')}</th>
+                          <th onClick={() => handleSort('dieta_nombre')} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>Dieta{sortIcon('dieta_nombre')}</th>
+                          <th onClick={() => handleSort('cantidad_kg')} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>Cantidad{sortIcon('cantidad_kg')}</th>
+                          <th style={{ whiteSpace: 'nowrap' }}>Kg/animal</th>
+                          <th onClick={() => handleSort('costo_total')} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>Costo total{sortIcon('costo_total')}</th>
+                          <th onClick={() => handleSort('responsable_nombre')} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>Responsable{sortIcon('responsable_nombre')}</th>
+                          <th>Obs.</th>
+                          <th style={{ width: 110 }}>Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {registros.map(r => {
+                        {registrosOrdenados.map(r => {
                           const animales = Number(corrales.find(c => c.id === r.ubicacion_id)?.animales_actuales || 0);
                           const kgAnimal = animales > 0 ? (parseFloat(r.cantidad_kg) / animales).toFixed(3) : '—';
                           return (
                             <tr key={r.id}>
                               <td style={{ whiteSpace: 'nowrap' }}>{parseDate(r.fecha_suministro).toLocaleDateString()}</td>
                               <td style={{ fontWeight: '600' }}>{r.ubicacion_nombre}</td>
-                              <td>
-                                <span style={{ background: '#e8f4fd', color: '#1572e8', borderRadius: '10px', padding: '2px 8px', fontSize: '12px', fontWeight: '600' }}>
-                                  {r.dieta_nombre}
-                                </span>
-                              </td>
+                              <td><span style={{ background: '#e8f4fd', color: '#1572e8', borderRadius: '10px', padding: '2px 8px', fontSize: '12px', fontWeight: '600' }}>{r.dieta_nombre}</span></td>
                               <td style={{ fontWeight: '700', color: '#1572e8' }}>{parseFloat(r.cantidad_kg).toFixed(1)} kg</td>
-                              <td style={{ color: '#31ce36', fontWeight: '600' }}>{kgAnimal} {kgAnimal !== '—' ? 'kg' : ''}</td>
+                              <td style={{ color: '#31ce36', fontWeight: '600' }}>{kgAnimal}{kgAnimal !== '—' ? ' kg' : ''}</td>
                               <td style={{ fontWeight: '600', color: '#ffad46' }}>${parseFloat(r.costo_total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                              <td style={{ fontSize: '12px', color: '#6c757d' }}>{r.responsable_nombre}</td>
-                              <td style={{ fontSize: '12px', color: '#6c757d', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.observaciones || '—'}</td>
+                              <td style={{ color: '#6c757d' }}>{r.responsable_nombre}</td>
+                              <td style={{ color: '#6c757d', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.observaciones || '—'}</td>
                               <td>
-                                <button className="btn btn-danger btn-sm" title="Eliminar registro" onClick={async () => {
-                                  if (!window.confirm(`¿Eliminar el registro de ${r.ubicacion_nombre} del ${parseDate(r.fecha_suministro).toLocaleDateString()}?`)) return;
-                                  try { await api.delete(`/nutrition/feeding/${r.id}`); loadRegistros(); } catch { alert('Error eliminando registro'); }
-                                }}><i className="fas fa-trash"></i></button>
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                  <button className="btn btn-info btn-sm" title="Ver detalle" onClick={() => setViewRegistro(r)}>
+                                    <i className="fas fa-eye"></i>
+                                  </button>
+                                  <button className="btn btn-warning btn-sm" title="Editar" onClick={() => handleEditRegistro(r)}>
+                                    <i className="fas fa-edit"></i>
+                                  </button>
+                                  <button className="btn btn-danger btn-sm" title="Eliminar" onClick={async () => {
+                                    if (!window.confirm(`¿Eliminar el registro de ${r.ubicacion_nombre} del ${parseDate(r.fecha_suministro).toLocaleDateString()}?`)) return;
+                                    try { await api.delete(`/nutrition/feeding/${r.id}`); loadRegistros(); } catch { alert('Error eliminando registro'); }
+                                  }}><i className="fas fa-trash"></i></button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -1213,6 +1274,86 @@ const NutritionComplete: React.FC = () => {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Modal Ver detalle */}
+                  {viewRegistro && (() => {
+                    const animales = Number(corrales.find(c => c.id === viewRegistro.ubicacion_id)?.animales_actuales || 0);
+                    const kgAnimal = animales > 0 ? (parseFloat(viewRegistro.cantidad_kg) / animales).toFixed(3) : '—';
+                    return (
+                      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1050, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        onClick={() => setViewRegistro(null)}>
+                        <div style={{ background: '#fff', borderRadius: '12px', padding: '28px', minWidth: 340, maxWidth: 480, width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}
+                          onClick={e => e.stopPropagation()}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <h5 style={{ margin: 0, color: '#1a2035' }}><i className="fas fa-clipboard-list" style={{ marginRight: '8px', color: '#1572e8' }}></i>Detalle de Alimentación</h5>
+                            <button className="btn btn-sm btn-secondary" onClick={() => setViewRegistro(null)}><i className="fas fa-times"></i></button>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            {[
+                              { label: 'Fecha', val: parseDate(viewRegistro.fecha_suministro).toLocaleDateString() },
+                              { label: 'Corral', val: viewRegistro.ubicacion_nombre },
+                              { label: 'Dieta', val: viewRegistro.dieta_nombre },
+                              { label: 'Cantidad total', val: `${parseFloat(viewRegistro.cantidad_kg).toFixed(1)} kg` },
+                              { label: 'Animales en corral', val: animales || '—' },
+                              { label: 'Kg por animal', val: kgAnimal !== '—' ? `${kgAnimal} kg` : '—' },
+                              { label: 'Costo total', val: `$${parseFloat(viewRegistro.costo_total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}` },
+                              { label: 'Responsable', val: viewRegistro.responsable_nombre },
+                            ].map(({ label, val }) => (
+                              <div key={label} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '10px 12px' }}>
+                                <div style={{ fontSize: '11px', color: '#6c757d', fontWeight: '600', marginBottom: '3px' }}>{label.toUpperCase()}</div>
+                                <div style={{ fontWeight: '700', color: '#1a2035' }}>{val}</div>
+                              </div>
+                            ))}
+                          </div>
+                          {viewRegistro.observaciones && (
+                            <div style={{ marginTop: '12px', background: '#fff3cd', borderRadius: '8px', padding: '10px 12px' }}>
+                              <div style={{ fontSize: '11px', color: '#856404', fontWeight: '600', marginBottom: '3px' }}>OBSERVACIONES</div>
+                              <div style={{ color: '#1a2035' }}>{viewRegistro.observaciones}</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Modal Editar */}
+                  {editRegistro && (
+                    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1050, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      onClick={() => setEditRegistro(null)}>
+                      <div style={{ background: '#fff', borderRadius: '12px', padding: '28px', minWidth: 340, maxWidth: 460, width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}
+                        onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                          <h5 style={{ margin: 0, color: '#1a2035' }}><i className="fas fa-edit" style={{ marginRight: '8px', color: '#ffad46' }}></i>Editar Registro</h5>
+                          <button className="btn btn-sm btn-secondary" onClick={() => setEditRegistro(null)}><i className="fas fa-times"></i></button>
+                        </div>
+                        <div style={{ marginBottom: '12px', fontSize: '13px', color: '#6c757d' }}>
+                          <i className="fas fa-calendar" style={{ marginRight: '6px' }}></i>{parseDate(editRegistro.fecha_suministro).toLocaleDateString()}
+                          <i className="fas fa-door-open" style={{ marginLeft: '12px', marginRight: '6px' }}></i>{editRegistro.ubicacion_nombre}
+                        </div>
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', fontSize: '13px' }}>Dieta *</label>
+                          <select value={editForm.dieta_id} onChange={e => setEditForm({...editForm, dieta_id: e.target.value})} style={inp()}>
+                            <option value="">— Seleccionar —</option>
+                            {diets.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+                          </select>
+                        </div>
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', fontSize: '13px' }}>Cantidad total (kg) *</label>
+                          <input type="number" step="0.1" min="0.1" value={editForm.cantidad_kg} onChange={e => setEditForm({...editForm, cantidad_kg: e.target.value})} style={inp()} />
+                        </div>
+                        <div style={{ marginBottom: '20px' }}>
+                          <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600', fontSize: '13px' }}>Observaciones</label>
+                          <input type="text" value={editForm.observaciones} onChange={e => setEditForm({...editForm, observaciones: e.target.value})} style={inp()} placeholder="Opcional..." />
+                        </div>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <button className="btn btn-success" onClick={handleSaveEditRegistro}>
+                            <i className="fas fa-save" style={{ marginRight: '6px' }}></i>Guardar cambios
+                          </button>
+                          <button className="btn btn-secondary" onClick={() => setEditRegistro(null)}>Cancelar</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>

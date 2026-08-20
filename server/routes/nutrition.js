@@ -122,6 +122,21 @@ router.put('/ingredients/:id/stock', authenticateToken, async (req, res) => {
   }
 });
 
+router.put('/feeding/:id', authenticateToken, async (req, res) => {
+  try {
+    const { dieta_id, cantidad_kg, observaciones } = req.body;
+    const dietaRes = await query('SELECT costo_por_kg FROM dietas WHERE id=$1', [dieta_id]);
+    if (dietaRes.rows.length === 0) return res.status(404).json({ error: 'Dieta no encontrada' });
+    await query(
+      `UPDATE registro_alimentacion SET dieta_id=$1, cantidad_kg=$2, observaciones=$3 WHERE id=$4`,
+      [dieta_id, cantidad_kg, observaciones || null, req.params.id]
+    );
+    res.json({ message: 'Registro actualizado' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error actualizando registro' });
+  }
+});
+
 router.delete('/feeding/:id', authenticateToken, async (req, res) => {
   try {
     await query('DELETE FROM alimentacion_animal WHERE registro_alimentacion_id=$1', [req.params.id]);
