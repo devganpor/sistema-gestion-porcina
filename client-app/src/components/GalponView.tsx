@@ -123,7 +123,7 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
       return <div style={{ fontSize: 9, color: '#ccc', textAlign: 'center', padding: '6px' }}>{animales.length > 0 ? 'sin coincidencias' : 'vacío'}</div>;
     }
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '4px', padding: '6px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: '3px', padding: '6px' }}>
         {animalesFiltrados.map(a => {
           const size = Math.max(pigSizeByWeight(a.peso_nacimiento, a.categoria), 18);
           const dotColor = HEALTH_COLOR[a.estado] || HEALTH_COLOR.default;
@@ -133,7 +133,7 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
             <div
               key={a.id}
               title={`${a.identificador_unico}${a.nombre ? ' · ' + a.nombre : ''} · ${a.categoria} · ${a.estado}${a.observaciones ? '\n⚠ ' + a.observaciones : ''}`}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', filter: isHovered ? 'drop-shadow(0 0 3px #1572e8)' : 'none', transition: 'filter 0.15s', cursor: 'pointer' }}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', filter: isHovered ? 'drop-shadow(0 0 3px #1572e8)' : 'none', transition: 'filter 0.15s', cursor: 'pointer', minWidth: 0, overflow: 'hidden' }}
               onMouseEnter={() => setHoveredAnimal(a.identificador_unico)}
               onMouseLeave={() => setHoveredAnimal(null)}
               onClick={e => { e.stopPropagation(); setSelectedAnimal(a); setSelectedCorral(null); }}
@@ -145,7 +145,7 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
                 hasObs={showObs && !!a.observaciones}
               />
               {showIds && (
-                <div style={{ fontSize: 6, color: '#555', textAlign: 'center', lineHeight: 1, marginTop: 1, width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 6, color: '#555', textAlign: 'center', lineHeight: 1, marginTop: 1, width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
                   {a.identificador_unico}
                 </div>
               )}
