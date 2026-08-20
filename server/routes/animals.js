@@ -250,18 +250,18 @@ router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
     const safe = async (fn) => { try { return await fn(); } catch(e) { console.error('TRAZA partial error:', e.message); return { rows: [] }; } };
 
     const [gastosRes, eventosRes, vacunasRes, movimientosRes, ingresosRes, alimentacionRes, pesajesRes, ciclosRes] = await Promise.all([
-      safe(() => query(`SELECT fecha, categoria, descripcion, monto FROM gastos WHERE animal_id=$1 ORDER BY fecha`, [id])),
-      safe(() => query(`SELECT fecha, tipo_evento, descripcion, COALESCE(costo,0) as costo, veterinario, tratamiento FROM eventos_sanitarios WHERE animal_id=$1 ORDER BY fecha`, [id])),
-      safe(() => query(`SELECT fecha_aplicacion as fecha, vacuna as descripcion FROM vacunaciones WHERE animal_id=$1 ORDER BY fecha_aplicacion`, [id])),
+      safe(() => query(`SELECT fecha::text, categoria, descripcion, monto FROM gastos WHERE animal_id=$1 ORDER BY fecha`, [id])),
+      safe(() => query(`SELECT fecha::text, tipo_evento, descripcion, COALESCE(costo,0) as costo, veterinario, tratamiento FROM eventos_sanitarios WHERE animal_id=$1 ORDER BY fecha`, [id])),
+      safe(() => query(`SELECT fecha_aplicacion::text as fecha, vacuna as descripcion FROM vacunaciones WHERE animal_id=$1 ORDER BY fecha_aplicacion`, [id])),
       safe(() => query(`
-        SELECT mu.fecha, mu.motivo, mu.costo_acumulado_momento, mu.peso_momento, mu.observaciones,
+        SELECT mu.fecha::text, mu.motivo, mu.costo_acumulado_momento, mu.peso_momento, mu.observaciones,
                uo.nombre as origen_nombre, ud.nombre as destino_nombre
         FROM movimientos_ubicacion mu
         LEFT JOIN ubicaciones uo ON mu.ubicacion_origen_id=uo.id
         LEFT JOIN ubicaciones ud ON mu.ubicacion_destino_id=ud.id
         WHERE mu.animal_id=$1 ORDER BY mu.fecha`, [id])),
       safe(() => query(`
-        SELECT COALESCE(fecha, fecha_ingreso::date) as fecha,
+        SELECT COALESCE(fecha::text, fecha_ingreso::text) as fecha,
                COALESCE(tipo, tipo_ingreso) as tipo,
                descripcion, monto,
                COALESCE(peso_venta, NULL) as peso_venta,
@@ -269,15 +269,15 @@ router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
                COALESCE(comprador, NULL) as comprador
         FROM ingresos WHERE animal_id=$1 ORDER BY 1`, [id])),
       safe(() => query(`
-        SELECT DISTINCT ON (fecha) fecha, dieta_nombre, kg_asignados, costo_asignado
+        SELECT DISTINCT ON (fecha) fecha::text, dieta_nombre, kg_asignados, costo_asignado
         FROM alimentacion_animal
         WHERE animal_id=$1
         ORDER BY fecha, id DESC
       `, [id])),
-      safe(() => query(`SELECT peso, fecha_pesaje, observaciones FROM pesajes WHERE animal_id=$1 ORDER BY fecha_pesaje`, [id])),
+      safe(() => query(`SELECT peso, fecha_pesaje::text, observaciones FROM pesajes WHERE animal_id=$1 ORDER BY fecha_pesaje`, [id])),
       safe(() => query(`
-        SELECT cr.numero_ciclo, cr.fecha_inicio, cr.fecha_celo, cr.fecha_servicio,
-               cr.fecha_parto_esperado, cr.fecha_parto_real,
+        SELECT cr.numero_ciclo, cr.fecha_inicio::text, cr.fecha_celo::text, cr.fecha_servicio::text,
+               cr.fecha_parto_esperado::text, cr.fecha_parto_real::text,
                cr.lechones_vivos, cr.lechones_muertos, cr.estado, cr.observaciones,
                v.identificador_unico as verraco_id
         FROM ciclos_reproductivos cr
@@ -287,7 +287,8 @@ router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
 
     const timeline = [];
 
-    const fechaIngreso = animal.fecha_ingreso || animal.fecha_nacimiento || animal.created_at;
+    const toDateStr = (v) => !v ? null : (typeof v === "string" ? v.split("T")[0] : new Date(v).toISOString().split("T")[0]);
+    const fechaIngreso = toDateStr(animal.fecha_ingreso || animal.fecha_nacimiento || animal.created_at);
     timeline.push({ fecha: fechaIngreso, tipo: 'ingreso',
       descripcion: animal.origen === 'compra' ? 'Compra del animal' : 'Nacimiento / Ingreso al sistema',
       monto: parseFloat(animal.valor_compra || 0), icono: 'fa-sign-in-alt', color: '#1572e8' });

@@ -988,7 +988,15 @@ const Animals: React.FC = () => {
               {!traceLoading && traceData && (() => {
                 const { animal, timeline, resumen } = traceData;
                 const fmt = (n: number) => `$${n.toFixed(3)}`;
-                const fmtDate = (s: string) => { const [y,m,d] = s.split('T')[0].split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('es-CO'); };
+                const fmtDate = (s: string | null | undefined) => {
+                  if (!s) return '—';
+                  const str = typeof s === 'string' ? s : new Date(s).toISOString();
+                  const part = str.split('T')[0];
+                  if (!part || part === 'Invalid Date') return '—';
+                  const [y,m,d] = part.split('-').map(Number);
+                  if (!y || !m || !d) return '—';
+                  return new Date(y,m-1,d).toLocaleDateString('es-CO');
+                };
 
                 // Leyenda de tipos
                 const TIPOS_LABEL: Record<string, string> = {
