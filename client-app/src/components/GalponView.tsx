@@ -187,7 +187,7 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
           <span style={{ fontSize: 10, fontWeight: 700, color: isSelected ? 'white' : '#1a2035', fontFamily: 'monospace' }}>
             {c.nombre}
           </span>
-          <span style={{ fontSize: 9, fontWeight: 700, color: isSelected ? 'white' : getOcupColor(pct), background: isSelected ? 'rgba(255,255,255,0.2)' : 'white', borderRadius: 8, padding: '1px 5px' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: isSelected ? 'white' : getOcupColor(pct), background: isSelected ? 'rgba(255,255,255,0.2)' : getOcupColor(pct) + '22', border: `1.5px solid ${getOcupColor(pct)}`, borderRadius: 8, padding: '2px 7px' }}>
             {c.animales_actuales}/{c.capacidad_maxima || '∞'}
           </span>
         </div>
