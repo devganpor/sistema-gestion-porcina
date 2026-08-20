@@ -338,13 +338,6 @@ const NutritionComplete: React.FC = () => {
     } catch { alert('Error actualizando registro'); }
   };
 
-  // Calcular costo estimado en tiempo real
-  const costoEstimado = (() => {
-    const dieta = diets.find(d => d.id === parseInt(feedingForm.dieta_id));
-    const kg = parseFloat(feedingForm.cantidad_kg);
-    if (!dieta || isNaN(kg)) return null;
-    return (parseFloat(dieta.costo_por_kg as any) * kg).toFixed(3);
-  })();
 
   // ---- Dietas ----
   const handleSubmit = async (e: React.FormEvent) => {
