@@ -22,6 +22,9 @@ interface AnimalCorral {
   observaciones: string | null;
   peso_nacimiento: number | null;
   fecha_nacimiento: string | null;
+  fecha_ingreso: string | null;
+  origen: string | null;
+  valor_compra: number | null;
   raza_nombre: string | null;
 }
 
@@ -38,12 +41,15 @@ const HEALTH_COLOR: Record<string, string> = {
   default:  '#adb5bd',
 };
 
-const CAT_SIZE: Record<string, number> = {
-  lechon:      8,
-  recria:      10,
-  desarrollo:  12,
-  engorde:     14,
-  reproductor: 16,
+// Tamaño visual basado en peso real (kg): mínimo 8px, máximo 20px
+const pigSizeByWeight = (peso: number | null, categoria: string): number => {
+  if (peso && peso > 0) {
+    // Escala logarítmica: lechón ~1kg=8px, cerdo adulto ~120kg=20px
+    const size = 8 + Math.log1p(peso) / Math.log1p(120) * 12;
+    return Math.round(Math.min(Math.max(size, 8), 20));
+  }
+  const fallback: Record<string, number> = { lechon: 8, recria: 10, desarrollo: 12, engorde: 14, reproductor: 16 };
+  return fallback[categoria] || 11;
 };
 
 // SVG minimalista de cerdo en vista cenital
@@ -117,9 +123,9 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
     return (
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px', justifyContent: 'center', padding: '4px' }}>
         {animales.map(a => {
-          const size = CAT_SIZE[a.categoria] || 11;
+          const size = pigSizeByWeight(a.peso_nacimiento, a.categoria);
           const dotColor = HEALTH_COLOR[a.estado] || HEALTH_COLOR.default;
-          const pigColor = a.sexo === 'hembra' ? '#ffd6d6' : '#d6e8ff';
+          const pigColor = a.sexo === 'hembra' ? '#f4829a' : '#5b9bd5';
           const isHovered = hoveredAnimal === a.identificador_unico;
           return (
             <div
@@ -255,7 +261,7 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
                 </span>
               ))}
               <span style={{ marginLeft: 8, fontSize: 11, color: '#6c757d', fontWeight: 600 }}>Sexo:</span>
-              {[['#ffd6d6','Hembra'],['#d6e8ff','Macho']].map(([c,l]) => (
+              {[['#f4829a','Hembra'],['#5b9bd5','Macho']].map(([c,l]) => (
                 <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#6c757d' }}>
                   <span style={{ width: 8, height: 8, borderRadius: 2, background: c, border: '1px solid #ccc', display: 'inline-block' }} />{l}
                 </span>
@@ -325,8 +331,11 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
                     ['Categoría', selectedAnimal.categoria],
                     ['Estado', selectedAnimal.estado],
                     ['Raza', selectedAnimal.raza_nombre || '—'],
+                    ['Origen', selectedAnimal.origen || '—'],
                     ['Peso nac.', selectedAnimal.peso_nacimiento ? `${selectedAnimal.peso_nacimiento} kg` : '—'],
-                    ['Nac.', selectedAnimal.fecha_nacimiento ? new Date(selectedAnimal.fecha_nacimiento).toLocaleDateString('es-EC') : '—'],
+                    ['Nacimiento', selectedAnimal.fecha_nacimiento ? new Date(selectedAnimal.fecha_nacimiento).toLocaleDateString('es-EC') : '—'],
+                    ['Ingreso', selectedAnimal.fecha_ingreso ? new Date(selectedAnimal.fecha_ingreso).toLocaleDateString('es-EC') : '—'],
+                    ['Valor compra', selectedAnimal.valor_compra ? `$${Number(selectedAnimal.valor_compra).toFixed(2)}` : '—'],
                   ].map(([k, v]) => (
                     <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #e9ecef', fontSize: 13 }}>
                       <span style={{ color: '#6c757d', fontWeight: 600 }}>{k}</span>

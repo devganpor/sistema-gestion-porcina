@@ -133,6 +133,7 @@ router.get('/:id/animals', authenticateToken, async (req, res) => {
     const result = await query(`
       SELECT a.id, a.identificador_unico, a.nombre, a.categoria, a.sexo,
              a.estado, a.observaciones, a.peso_nacimiento, a.fecha_nacimiento,
+             a.origen, a.fecha_ingreso, a.valor_compra,
              r.nombre as raza_nombre
       FROM animales a
       LEFT JOIN razas r ON a.raza_id = r.id
