@@ -36,11 +36,22 @@ router.get('/kpis', authenticateToken, asyncHandler(async (req, res) => {
     `),
     // Total animales activos
     query(`SELECT COUNT(*) as total FROM animales WHERE estado = 'activo'`),
-    // Finanzas del período
+    // Finanzas del período + costo alimentación
     query(`
       SELECT
         COALESCE(SUM(i.monto),0) as total_ingresos,
-        COALESCE((SELECT SUM(monto) FROM gastos WHERE fecha >= CURRENT_DATE - ($1 || ' months')::interval),0) as total_gastos
+        COALESCE((SELECT SUM(monto) FROM gastos WHERE fecha >= CURRENT_DATE - ($1 || ' months')::interval),0) as total_gastos,
+        COALESCE((
+          SELECT SUM(sub.cantidad_kg * sub.costo_por_kg)
+          FROM (
+            SELECT DISTINCT ON (ra.ubicacion_id, ra.fecha_suministro)
+              ra.cantidad_kg, d.costo_por_kg
+            FROM registro_alimentacion ra
+            JOIN dietas d ON ra.dieta_id = d.id
+            WHERE ra.fecha_suministro >= CURRENT_DATE - ($1 || ' months')::interval
+            ORDER BY ra.ubicacion_id, ra.fecha_suministro, ra.id DESC
+          ) sub
+        ), 0) as costo_alimentacion
       FROM ingresos i
       WHERE i.fecha >= CURRENT_DATE - ($1 || ' months')::interval
     `, [months]),
@@ -57,9 +68,11 @@ router.get('/kpis', authenticateToken, asyncHandler(async (req, res) => {
 
   const ingresos = parseFloat(finanzas.rows[0].total_ingresos) || 0;
   const gastos = parseFloat(finanzas.rows[0].total_gastos) || 0;
-  const roi = ingresos > 0 ? ((ingresos - gastos) / gastos * 100).toFixed(1) : 0;
-  const costoKg = gastos > 0 && inventario.rows[0].total > 0
-    ? Math.round(gastos / inventario.rows[0].total)
+  const costoAlimentacion = parseFloat(finanzas.rows[0].costo_alimentacion) || 0;
+  const gastosTotales = gastos + costoAlimentacion;
+  const roi = ingresos > 0 ? ((ingresos - gastosTotales) / Math.max(gastosTotales, 1) * 100).toFixed(1) : 0;
+  const costoKg = gastosTotales > 0 && inventario.rows[0].total > 0
+    ? (gastosTotales / parseInt(inventario.rows[0].total)).toFixed(3)
     : 0;
 
   res.json({
@@ -67,10 +80,11 @@ router.get('/kpis', authenticateToken, asyncHandler(async (req, res) => {
     promedio_lechones: parseFloat(mortalidad.rows[0].promedio_lechones) || 0,
     ganancia_diaria: parseInt(ganancia.rows[0].ganancia_diaria_g) || 0,
     dias_mercado: parseInt(pesosEngorde.rows[0].dias_mercado) || 0,
-    costo_kg_producido: costoKg,
+    costo_kg_producido: parseFloat(costoKg),
     roi: parseFloat(roi),
     total_ingresos: ingresos,
-    total_gastos: gastos
+    total_gastos: gastosTotales,
+    costo_alimentacion: costoAlimentacion
   });
 }));
 

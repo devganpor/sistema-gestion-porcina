@@ -268,7 +268,12 @@ router.get('/:id/trazabilidad', authenticateToken, async (req, res) => {
                COALESCE(precio_kg, NULL) as precio_kg,
                COALESCE(comprador, NULL) as comprador
         FROM ingresos WHERE animal_id=$1 ORDER BY 1`, [id])),
-      safe(() => query(`SELECT fecha, dieta_nombre, kg_asignados, costo_asignado FROM alimentacion_animal WHERE animal_id=$1 ORDER BY fecha`, [id])),
+      safe(() => query(`
+        SELECT DISTINCT ON (fecha) fecha, dieta_nombre, kg_asignados, costo_asignado
+        FROM alimentacion_animal
+        WHERE animal_id=$1
+        ORDER BY fecha, id DESC
+      `, [id])),
       safe(() => query(`SELECT peso, fecha_pesaje, observaciones FROM pesajes WHERE animal_id=$1 ORDER BY fecha_pesaje`, [id])),
       safe(() => query(`
         SELECT cr.numero_ciclo, cr.fecha_inicio, cr.fecha_celo, cr.fecha_servicio,

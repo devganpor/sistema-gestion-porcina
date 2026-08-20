@@ -125,12 +125,37 @@ router.put('/ingredients/:id/stock', authenticateToken, async (req, res) => {
 router.put('/feeding/:id', authenticateToken, async (req, res) => {
   try {
     const { dieta_id, cantidad_kg, observaciones } = req.body;
-    const dietaRes = await query('SELECT costo_por_kg FROM dietas WHERE id=$1', [dieta_id]);
+    const dietaRes = await query('SELECT nombre, costo_por_kg FROM dietas WHERE id=$1', [dieta_id]);
     if (dietaRes.rows.length === 0) return res.status(404).json({ error: 'Dieta no encontrada' });
+    const dieta = dietaRes.rows[0];
+    const costo_por_kg = parseFloat(dieta.costo_por_kg || 0);
+
+    // Obtener datos del registro para recalcular distribución
+    const regRes = await query('SELECT ubicacion_id, fecha_suministro FROM registro_alimentacion WHERE id=$1', [req.params.id]);
+    if (regRes.rows.length === 0) return res.status(404).json({ error: 'Registro no encontrado' });
+    const { ubicacion_id, fecha_suministro } = regRes.rows[0];
+
     await query(
       `UPDATE registro_alimentacion SET dieta_id=$1, cantidad_kg=$2, observaciones=$3 WHERE id=$4`,
       [dieta_id, cantidad_kg, observaciones || null, req.params.id]
     );
+
+    // Recalcular alimentacion_animal
+    const animalesRes = await query(
+      `SELECT id FROM animales WHERE ubicacion_actual_id=$1 AND estado='activo'`,
+      [ubicacion_id]
+    );
+    const n = animalesRes.rows.length;
+    if (n > 0) {
+      const kg_por_animal = parseFloat(cantidad_kg) / n;
+      const costo_por_animal = (parseFloat(cantidad_kg) * costo_por_kg) / n;
+      await query(
+        `UPDATE alimentacion_animal SET kg_asignados=$1, costo_asignado=$2, dieta_nombre=$3, animales_en_ubicacion=$4
+         WHERE registro_alimentacion_id=$5`,
+        [kg_por_animal, costo_por_animal, dieta.nombre, n, req.params.id]
+      );
+    }
+
     res.json({ message: 'Registro actualizado' });
   } catch (error) {
     res.status(500).json({ error: 'Error actualizando registro' });
@@ -144,6 +169,36 @@ router.delete('/feeding/:id', authenticateToken, async (req, res) => {
     res.json({ message: 'Registro eliminado' });
   } catch (error) {
     res.status(500).json({ error: 'Error eliminando registro' });
+  }
+});
+
+// Limpia duplicados históricos en registro_alimentacion (mismo corral + fecha)
+// Conserva el registro más reciente (mayor id) por cada par ubicacion_id + fecha_suministro
+router.post('/feeding/cleanup-duplicates', authenticateToken, async (req, res) => {
+  const client = await require('../config/database-pg').pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Identificar ids a eliminar (todos excepto el más reciente por corral+fecha)
+    const duplicados = await client.query(`
+      SELECT id FROM registro_alimentacion
+      WHERE id NOT IN (
+        SELECT DISTINCT ON (ubicacion_id, fecha_suministro) id
+        FROM registro_alimentacion
+        ORDER BY ubicacion_id, fecha_suministro, id DESC
+      )
+    `);
+    const ids = duplicados.rows.map(r => r.id);
+    if (ids.length > 0) {
+      await client.query(`DELETE FROM alimentacion_animal WHERE registro_alimentacion_id = ANY($1)`, [ids]);
+      await client.query(`DELETE FROM registro_alimentacion WHERE id = ANY($1)`, [ids]);
+    }
+    await client.query('COMMIT');
+    res.json({ message: `Limpieza completada. Registros duplicados eliminados: ${ids.length}`, eliminados: ids.length });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Error en limpieza de duplicados' });
+  } finally {
+    client.release();
   }
 });
 
@@ -295,14 +350,19 @@ router.get('/consumption-stats', authenticateToken, async (req, res) => {
 
     const stats = await query(`
       SELECT u.nombre as ubicacion, u.tipo,
-        SUM(ra.cantidad_kg) as total_consumido,
-        SUM(ra.cantidad_kg * d.costo_por_kg) as costo_total,
-        AVG(ra.cantidad_kg) as promedio_diario,
-        COUNT(DISTINCT ra.fecha_suministro) as dias_alimentacion
-      FROM registro_alimentacion ra
-      JOIN ubicaciones u ON ra.ubicacion_id = u.id
-      JOIN dietas d ON ra.dieta_id = d.id
-      WHERE ra.fecha_suministro BETWEEN $1 AND $2
+        SUM(sub.cantidad_kg) as total_consumido,
+        SUM(sub.cantidad_kg * sub.costo_por_kg) as costo_total,
+        AVG(sub.cantidad_kg) as promedio_diario,
+        COUNT(*) as dias_alimentacion
+      FROM (
+        SELECT DISTINCT ON (ra.ubicacion_id, ra.fecha_suministro)
+          ra.ubicacion_id, ra.cantidad_kg, d.costo_por_kg
+        FROM registro_alimentacion ra
+        JOIN dietas d ON ra.dieta_id = d.id
+        WHERE ra.fecha_suministro BETWEEN $1 AND $2
+        ORDER BY ra.ubicacion_id, ra.fecha_suministro, ra.id DESC
+      ) sub
+      JOIN ubicaciones u ON sub.ubicacion_id = u.id
       GROUP BY u.id, u.nombre, u.tipo
       ORDER BY total_consumido DESC
     `, [fi, ff]);

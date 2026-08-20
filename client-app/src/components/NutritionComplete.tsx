@@ -1195,6 +1195,17 @@ const NutritionComplete: React.FC = () => {
                   <button className="btn btn-primary" onClick={loadRegistros}>
                     <i className="fas fa-search" style={{ marginRight: '6px' }}></i>Buscar
                   </button>
+                  <button className="btn btn-warning btn-sm" style={{ marginLeft: '8px' }} title="Eliminar registros duplicados históricos de la BD"
+                    onClick={async () => {
+                      if (!window.confirm('¿Limpiar duplicados históricos de alimentación en la base de datos? Esta acción no se puede deshacer.')) return;
+                      try {
+                        const r = await api.post('/nutrition/feeding/cleanup-duplicates', {});
+                        alert(r.data.message);
+                        loadRegistros();
+                      } catch { alert('Error en limpieza'); }
+                    }}>
+                    <i className="fas fa-broom" style={{ marginRight: '6px' }}></i>Limpiar duplicados
+                  </button>
                   <button className="btn btn-success" style={{ marginLeft: 'auto' }} onClick={() => setShowFeedingForm(true)}>
                     <i className="fas fa-plus" style={{ marginRight: '6px' }}></i>Registrar Alimentación
                   </button>

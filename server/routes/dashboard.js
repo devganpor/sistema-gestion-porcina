@@ -18,7 +18,7 @@ router.get('/kpis', authenticateToken, asyncHandler(async (req, res) => {
       WHERE a.estado = 'activo'
       AND a.categoria IN ('engorde', 'desarrollo')
       AND p.peso >= 100
-      AND p.fecha_pesaje = (SELECT MAX(p2.fecha_pesaje) FROM pesajes p2 WHERE p2.animal_id = a.id)
+      AND p.id = (SELECT p2.id FROM pesajes p2 WHERE p2.animal_id = a.id ORDER BY p2.fecha_pesaje DESC LIMIT 1)
     `)
   ]);
 
