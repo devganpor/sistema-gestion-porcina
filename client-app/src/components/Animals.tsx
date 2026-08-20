@@ -163,7 +163,7 @@ const Animals: React.FC = () => {
       const peso = parseFloat(formData.peso_nacimiento);
       if (isNaN(peso) || peso <= 0) {
         newErrors.peso_nacimiento = 'El peso debe ser un número mayor a 0';
-      } else if (peso > 5) {
+      } else if (peso > 30) {
         newErrors.peso_nacimiento = 'El peso de nacimiento parece demasiado alto';
       }
     }
