@@ -721,46 +721,60 @@ const Animals: React.FC = () => {
               )}
               
               {modalType === 'view' && selectedAnimal ? (
-                <div className="grid grid-2">
-                  <div>
-                    <h6 style={{ color: '#1a2035', marginBottom: '15px' }}>Información Básica</h6>
-                    <div style={{ marginBottom: '15px' }}>
-                      <strong>ID Único:</strong>
-                      <p style={{ margin: '5px 0 0 0' }}>{selectedAnimal.identificador_unico}</p>
+                <div>
+                  {/* Cabecera del animal */}
+                  <div style={{ background: 'linear-gradient(135deg, #f0f4ff, #f8f0ff)', border: '1px solid #d4b8ff', borderRadius: '10px', padding: '16px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ width: 52, height: 52, borderRadius: '50%', background: selectedAnimal.sexo === 'hembra' ? '#f25961' : '#1572e8', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <i className="fas fa-paw" style={{ color: 'white', fontSize: 20 }} />
                     </div>
-                    <div style={{ marginBottom: '15px' }}>
-                      <strong>Nombre:</strong>
-                      <p style={{ margin: '5px 0 0 0' }}>{selectedAnimal.nombre || 'Sin nombre'}</p>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 18, color: '#1a2035' }}>{selectedAnimal.identificador_unico}</div>
+                      {selectedAnimal.nombre && <div style={{ color: '#6c757d', fontSize: 14 }}>{selectedAnimal.nombre}</div>}
                     </div>
-                    <div style={{ marginBottom: '15px' }}>
-                      <strong>Sexo:</strong>
-                      <p style={{ margin: '5px 0 0 0', textTransform: 'capitalize' }}>{selectedAnimal.sexo}</p>
-                    </div>
-                    <div style={{ marginBottom: '15px' }}>
-                      <strong>Categoría:</strong>
-                      <p style={{ margin: '5px 0 0 0', textTransform: 'capitalize' }}>{selectedAnimal.categoria}</p>
-                    </div>
+                    <span style={{ padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '700', background: selectedAnimal.estado === 'activo' ? '#31ce36' : selectedAnimal.estado === 'vendido' ? '#ffad46' : '#f25961', color: 'white', textTransform: 'capitalize' }}>
+                      {selectedAnimal.estado}
+                    </span>
                   </div>
-                  <div>
-                    <h6 style={{ color: '#1a2035', marginBottom: '15px' }}>Detalles Adicionales</h6>
-                    <div style={{ marginBottom: '15px' }}>
-                      <strong>Estado:</strong>
-                      <p style={{ margin: '5px 0 0 0', textTransform: 'capitalize' }}>{selectedAnimal.estado}</p>
+
+                  {/* Grid de campos */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                    {([
+                      { icon: 'fa-venus-mars', label: 'Sexo', val: selectedAnimal.sexo, cap: true },
+                      { icon: 'fa-layer-group', label: 'Categoría', val: selectedAnimal.categoria, cap: true },
+                      { icon: 'fa-dna', label: 'Raza', val: selectedAnimal.raza_nombre || '—', cap: false },
+                      { icon: 'fa-map-marker-alt', label: 'Ubicación', val: selectedAnimal.ubicacion_nombre || '—', cap: false },
+                      { icon: 'fa-calendar', label: 'Fecha Nacimiento', val: selectedAnimal.fecha_nacimiento ? new Date(selectedAnimal.fecha_nacimiento).toLocaleDateString('es-EC') : '—', cap: false },
+                      { icon: 'fa-weight', label: 'Peso Nacimiento', val: selectedAnimal.peso_nacimiento ? `${selectedAnimal.peso_nacimiento} kg` : '—', cap: false },
+                      { icon: 'fa-sign-in-alt', label: 'Origen', val: selectedAnimal.origen === 'compra' ? 'Compra externa' : selectedAnimal.origen === 'nacimiento' ? 'Nacimiento en granja' : (selectedAnimal.origen || '—'), cap: false },
+                      { icon: 'fa-calendar-check', label: 'Fecha Ingreso', val: selectedAnimal.fecha_ingreso ? new Date(selectedAnimal.fecha_ingreso).toLocaleDateString('es-EC') : '—', cap: false },
+                      { icon: 'fa-dollar-sign', label: 'Valor Compra / Ingreso', val: selectedAnimal.valor_compra ? `$${Number(selectedAnimal.valor_compra).toLocaleString('es-EC')}` : '—', cap: false },
+                    ] as {icon:string;label:string;val:string;cap:boolean}[]).map((f, i) => (
+                      <div key={i} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                        <i className={`fas ${f.icon}`} style={{ color: '#6f42c1', marginTop: 2, width: 14, flexShrink: 0 }} />
+                        <div>
+                          <div style={{ fontSize: 11, color: '#6c757d', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>{f.label}</div>
+                          <div style={{ fontWeight: 600, color: '#1a2035', textTransform: f.cap ? 'capitalize' : 'none' }}>{f.val}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Observaciones */}
+                  {selectedAnimal.observaciones && (
+                    <div style={{ background: '#fffbea', border: '1px solid #ffe082', borderRadius: '8px', padding: '12px 16px' }}>
+                      <div style={{ fontSize: 11, color: '#6c757d', fontWeight: 600, textTransform: 'uppercase', marginBottom: 6 }}>
+                        <i className="fas fa-comment-alt" style={{ marginRight: 6, color: '#ffad46' }} />
+                        Observaciones
+                      </div>
+                      <div style={{ color: '#1a2035', fontSize: 14, lineHeight: 1.6 }}>{selectedAnimal.observaciones}</div>
                     </div>
-                    <div style={{ marginBottom: '15px' }}>
-                      <strong>Raza:</strong>
-                      <p style={{ margin: '5px 0 0 0' }}>{selectedAnimal.raza_nombre || 'No especificada'}</p>
-                    </div>
-                    <div style={{ marginBottom: '15px' }}>
-                      <strong>Ubicación:</strong>
-                      <p style={{ margin: '5px 0 0 0' }}>{selectedAnimal.ubicacion_nombre || 'No asignada'}</p>
-                    </div>
-                    <div style={{ marginBottom: '15px' }}>
-                      <strong>Fecha Nacimiento:</strong>
-                      <p style={{ margin: '5px 0 0 0' }}>
-                        {selectedAnimal.fecha_nacimiento ? new Date(selectedAnimal.fecha_nacimiento).toLocaleDateString() : 'No registrada'}
-                      </p>
-                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
+                    <button className="btn btn-warning btn-sm" onClick={() => { setShowModal(false); handleEdit(selectedAnimal); }}>
+                      <i className="fas fa-edit" style={{ marginRight: '6px' }} />Editar
+                    </button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setShowModal(false)}>Cerrar</button>
                   </div>
                 </div>
               ) : (
