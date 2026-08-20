@@ -123,7 +123,7 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
       return <div style={{ fontSize: 9, color: '#ccc', textAlign: 'center', padding: '6px' }}>{animales.length > 0 ? 'sin coincidencias' : 'vacío'}</div>;
     }
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', padding: '6px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '4px', padding: '6px' }}>
         {animalesFiltrados.map(a => {
           const size = Math.max(pigSizeByWeight(a.peso_nacimiento, a.categoria), 18);
           const dotColor = HEALTH_COLOR[a.estado] || HEALTH_COLOR.default;
