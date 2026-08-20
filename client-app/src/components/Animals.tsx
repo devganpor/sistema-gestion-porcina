@@ -349,7 +349,7 @@ const Animals: React.FC = () => {
       loadAnimals();
       setTimeout(() => setSuccess(''), 3000);
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Error eliminando animal');
+      alert(error.response?.data?.error || error.response?.data?.message || 'Error eliminando animal');
     }
   };
 

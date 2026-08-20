@@ -437,12 +437,23 @@ router.put('/:id', authenticateToken, async (req, res) => {
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const [pesajes, eventos] = await Promise.all([
+
+    const animalRes = await query('SELECT id FROM animales WHERE id=$1', [id]);
+    if (animalRes.rows.length === 0) return res.status(404).json({ error: 'Animal no encontrado' });
+
+    const checks = await Promise.all([
       query('SELECT COUNT(*) as count FROM pesajes WHERE animal_id = $1', [id]),
-      query('SELECT COUNT(*) as count FROM eventos_sanitarios WHERE animal_id = $1', [id])
+      query('SELECT COUNT(*) as count FROM eventos_sanitarios WHERE animal_id = $1', [id]),
+      query('SELECT COUNT(*) as count FROM gastos WHERE animal_id = $1', [id]),
+      query('SELECT COUNT(*) as count FROM movimientos_ubicacion WHERE animal_id = $1', [id]),
+      query('SELECT COUNT(*) as count FROM ciclos_reproductivos WHERE cerda_id = $1', [id]),
+      query('SELECT COUNT(*) as count FROM alimentacion_animal WHERE animal_id = $1', [id]),
+      query('SELECT COUNT(*) as count FROM ingresos WHERE animal_id = $1', [id]),
     ]);
 
-    if (parseInt(pesajes.rows[0].count) > 0 || parseInt(eventos.rows[0].count) > 0) {
+    const tieneRegistros = checks.some(r => parseInt(r.rows[0].count) > 0);
+
+    if (tieneRegistros) {
       await query(
         'UPDATE animales SET estado=$1, fecha_salida=$2, motivo_salida=$3 WHERE id=$4',
         ['eliminado', new Date().toISOString().split('T')[0], 'Eliminado del sistema', id]
@@ -453,7 +464,8 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       res.json({ message: 'Animal eliminado completamente' });
     }
   } catch (error) {
-    res.status(500).json({ error: 'Error eliminando animal' });
+    console.error('DELETE animal error:', error);
+    res.status(500).json({ error: error.message || 'Error eliminando animal' });
   }
 });
 
