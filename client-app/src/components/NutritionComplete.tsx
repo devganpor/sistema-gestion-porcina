@@ -1228,6 +1228,7 @@ const NutritionComplete: React.FC = () => {
                       { label: 'Total kg', val: registros.reduce((s,r) => s + parseFloat(r.cantidad_kg||0), 0).toFixed(1) + ' kg', color: '#31ce36', icon: 'fa-weight' },
                       { label: 'Costo total', val: '$' + registros.reduce((s,r) => s + parseFloat(r.costo_total||0), 0).toFixed(3), color: '#ffad46', icon: 'fa-dollar-sign' },
                       { label: 'Corrales', val: new Set(registros.map(r => r.ubicacion_id)).size, color: '#6f42c1', icon: 'fa-door-open' },
+                      { label: 'Sacos (40 kg)', val: Math.ceil(registros.reduce((s,r) => s + parseFloat(r.cantidad_kg||0), 0) / 40), color: '#20c997', icon: 'fa-box' },
                     ].map(kpi => (
                       <div key={kpi.label} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '14px', textAlign: 'center' }}>
                         <i className={`fas ${kpi.icon}`} style={{ color: kpi.color, marginBottom: '4px', fontSize: '16px' }}></i>
@@ -1245,6 +1246,7 @@ const NutritionComplete: React.FC = () => {
                           <th onClick={() => handleSort('dieta_nombre')} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>Dieta{sortIcon('dieta_nombre')}</th>
                           <th onClick={() => handleSort('cantidad_kg')} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>Cantidad{sortIcon('cantidad_kg')}</th>
                           <th style={{ whiteSpace: 'nowrap' }}>Kg/animal</th>
+                          <th style={{ whiteSpace: 'nowrap' }}>Sacos</th>
                           <th onClick={() => handleSort('costo_total')} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>Costo total{sortIcon('costo_total')}</th>
                           <th onClick={() => handleSort('responsable_nombre')} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>Responsable{sortIcon('responsable_nombre')}</th>
                           <th>Obs.</th>
@@ -1262,6 +1264,7 @@ const NutritionComplete: React.FC = () => {
                               <td><span style={{ background: '#e8f4fd', color: '#1572e8', borderRadius: '10px', padding: '2px 8px', fontSize: '12px', fontWeight: '600' }}>{r.dieta_nombre}</span></td>
                               <td style={{ fontWeight: '700', color: '#1572e8' }}>{parseFloat(r.cantidad_kg).toFixed(1)} kg</td>
                               <td style={{ color: '#31ce36', fontWeight: '600' }}>{kgAnimal}{kgAnimal !== '—' ? ' kg' : ''}</td>
+                              <td style={{ color: '#20c997', fontWeight: '700' }}>{Math.ceil(parseFloat(r.cantidad_kg) / 40)} <span style={{ fontSize: '11px', color: '#6c757d' }}>({parseFloat(r.cantidad_kg).toFixed(1)} kg)</span></td>
                               <td style={{ fontWeight: '600', color: '#ffad46' }}>${parseFloat(r.costo_total||0).toFixed(3)}</td>
                               <td style={{ color: '#6c757d' }}>{r.responsable_nombre}</td>
                               <td style={{ color: '#6c757d', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.observaciones || '—'}</td>
@@ -1307,6 +1310,7 @@ const NutritionComplete: React.FC = () => {
                               { label: 'Cantidad total', val: `${parseFloat(viewRegistro.cantidad_kg).toFixed(1)} kg` },
                               { label: 'Animales en corral', val: animales || '—' },
                               { label: 'Kg por animal', val: kgAnimal !== '—' ? `${kgAnimal} kg` : '—' },
+                              { label: 'Sacos (40 kg)', val: `${Math.ceil(parseFloat(viewRegistro.cantidad_kg) / 40)} sacos (${parseFloat(viewRegistro.cantidad_kg).toFixed(1)} kg)` },
                               { label: 'Costo total', val: `$${parseFloat(viewRegistro.costo_total||0).toFixed(3)}` },
                               { label: 'Responsable', val: viewRegistro.responsable_nombre },
                             ].map(({ label, val }) => (
