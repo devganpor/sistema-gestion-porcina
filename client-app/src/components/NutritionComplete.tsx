@@ -112,6 +112,21 @@ const NutritionComplete: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [formData, setFormData] = useState(emptyForm);
 
+  // --- Registros ---
+  const [registros, setRegistros] = useState<any[]>([]);
+  const [corrales, setCorrales] = useState<any[]>([]);
+  const [showFeedingForm, setShowFeedingForm] = useState(false);
+  const [feedingLoading, setFeedingLoading] = useState(false);
+  const [feedingForm, setFeedingForm] = useState({
+    fecha: new Date().toISOString().split('T')[0],
+    ubicacion_id: '',
+    dieta_id: '',
+    cantidad_kg: '',
+    observaciones: ''
+  });
+  const [filtroFecha, setFiltroFecha] = useState(new Date().toISOString().split('T')[0]);
+  const [filtroCorral, setFiltroCorral] = useState('');
+
   // --- Planes ---
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
@@ -133,18 +148,64 @@ const NutritionComplete: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [dietsRes, plansRes] = await Promise.all([
+      const [dietsRes, plansRes, corralesRes] = await Promise.all([
         api.get('/nutrition/diets').catch(() => ({ data: [] })),
-        api.get('/nutrition/plans').catch(() => ({ data: [] }))
+        api.get('/nutrition/plans').catch(() => ({ data: [] })),
+        api.get('/locations').catch(() => ({ data: [] }))
       ]);
       setDiets(dietsRes.data);
       setPlans(plansRes.data);
+      setCorrales(corralesRes.data.filter((u: any) => ['corral','maternidad','aislamiento'].includes(u.tipo)));
     } catch (error) {
       console.error('Error cargando datos:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  const loadRegistros = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (filtroFecha) { params.append('fecha_inicio', filtroFecha); params.append('fecha_fin', filtroFecha); }
+      if (filtroCorral) params.append('ubicacion_id', filtroCorral);
+      const res = await api.get(`/nutrition/feeding?${params.toString()}`);
+      setRegistros(res.data);
+    } catch { setRegistros([]); }
+  };
+
+  const handleFeedingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!feedingForm.ubicacion_id || !feedingForm.dieta_id || !feedingForm.cantidad_kg) {
+      alert('Completa corral, dieta y cantidad'); return;
+    }
+    setFeedingLoading(true);
+    try {
+      const res = await api.post('/nutrition/feeding', {
+        ubicacion_id: parseInt(feedingForm.ubicacion_id),
+        dieta_id: parseInt(feedingForm.dieta_id),
+        cantidad_kg: parseFloat(feedingForm.cantidad_kg),
+        fecha_suministro: feedingForm.fecha,
+        observaciones: feedingForm.observaciones || null
+      });
+      setSuccess(`✅ Alimentación registrada — ${res.data.animales_distribuidos} animales · ${res.data.kg_por_animal} kg/animal`);
+      setShowFeedingForm(false);
+      setFeedingForm({ fecha: new Date().toISOString().split('T')[0], ubicacion_id: '', dieta_id: '', cantidad_kg: '', observaciones: '' });
+      loadRegistros();
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Error registrando alimentación');
+    } finally { setFeedingLoading(false); }
+  };
+
+  // Calcular costo estimado en tiempo real
+  const costoEstimado = (() => {
+    const dieta = diets.find(d => d.id === parseInt(feedingForm.dieta_id));
+    const kg = parseFloat(feedingForm.cantidad_kg);
+    if (!dieta || isNaN(kg)) return null;
+    return (parseFloat(dieta.costo_por_kg as any) * kg).toFixed(2);
+  })();
+
+  const corralSeleccionado = corrales.find(c => c.id === parseInt(feedingForm.ubicacion_id));
 
   // ---- Dietas ----
   const handleSubmit = async (e: React.FormEvent) => {
@@ -396,7 +457,12 @@ const NutritionComplete: React.FC = () => {
                   </button>
                 </>
               )}
-              {activeTab === 'planes' && selectedPlan && (
+              {activeTab === 'registros' && (
+                <button className="btn btn-success" onClick={() => setShowFeedingForm(v => !v)}>
+                  <i className={`fas ${showFeedingForm ? 'fa-times' : 'fa-plus'}`} style={{ marginRight: '8px' }}></i>
+                  {showFeedingForm ? 'Cancelar' : 'Registrar Alimentación'}
+                </button>
+              )}
                 <button className="btn btn-secondary" onClick={() => { setSelectedPlan(null); setPlanDetail(null); }}>
                   <i className="fas fa-arrow-left" style={{ marginRight: '8px' }}></i>Volver a Planes
                 </button>
@@ -467,7 +533,7 @@ const NutritionComplete: React.FC = () => {
           <div style={{ display: 'flex', marginBottom: '20px', borderBottom: '1px solid #ebedf2' }}>
             {tabBtn('dietas', 'fa-utensils', 'Dietas')}
             {tabBtn('planes', 'fa-calendar-alt', 'Planes de Alimentación')}
-            {tabBtn('registros', 'fa-clipboard-list', 'Registros')}
+            {tabBtn('registros', 'fa-clipboard-list', 'Registro Diario')}
           </div>
 
           {activeTab === 'dietas' && (
@@ -908,10 +974,156 @@ const NutritionComplete: React.FC = () => {
 
           {/* ============ TAB REGISTROS ============ */}
           {activeTab === 'registros' && (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
-              <i className="fas fa-clipboard-list" style={{ fontSize: '48px', marginBottom: '15px', opacity: 0.5 }}></i>
-              <h5>Registros de Alimentación</h5>
-              <p>Usa el módulo de dietas para crear dietas y luego registra el suministro diario aquí.</p>
+            <div>
+              {/* Formulario registro */}
+              {showFeedingForm && (
+                <div className="card" style={{ marginBottom: '20px', border: '1px solid #bee3f8' }}>
+                  <div className="card-header" style={{ background: '#e8f4fd' }}>
+                    <h5 className="card-title" style={{ margin: 0, color: '#1a2035' }}>
+                      <i className="fas fa-plus" style={{ marginRight: '8px', color: '#1572e8' }}></i>Registrar Alimentación
+                    </h5>
+                  </div>
+                  <div style={{ padding: '20px' }}>
+                    <form onSubmit={handleFeedingSubmit}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '14px' }}>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', fontSize: '13px' }}>Fecha *</label>
+                          <input type="date" value={feedingForm.fecha} onChange={e => setFeedingForm({...feedingForm, fecha: e.target.value})} style={inp()} required />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', fontSize: '13px' }}>Corral *</label>
+                          <select value={feedingForm.ubicacion_id} onChange={e => setFeedingForm({...feedingForm, ubicacion_id: e.target.value})} style={inp()} required>
+                            <option value="">— Seleccionar corral —</option>
+                            {corrales.map(c => (
+                              <option key={c.id} value={c.id}>{c.nombre}{c.etiqueta ? ` — ${c.etiqueta}` : ''} ({Number(c.animales_actuales)} animales)</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', fontSize: '13px' }}>Dieta *</label>
+                          <select value={feedingForm.dieta_id} onChange={e => setFeedingForm({...feedingForm, dieta_id: e.target.value})} style={inp()} required>
+                            <option value="">— Seleccionar dieta —</option>
+                            {diets.map(d => (
+                              <option key={d.id} value={d.id}>{d.nombre} ({d.categoria_animal}) — ${parseFloat(d.costo_por_kg as any).toLocaleString()}/kg</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', fontSize: '13px' }}>Cantidad total (kg) *</label>
+                          <input type="number" step="0.1" min="0.1" value={feedingForm.cantidad_kg} onChange={e => setFeedingForm({...feedingForm, cantidad_kg: e.target.value})} style={inp()} placeholder="Ej: 120" required />
+                        </div>
+                      </div>
+
+                      {/* Preview en tiempo real */}
+                      {feedingForm.ubicacion_id && feedingForm.dieta_id && feedingForm.cantidad_kg && (
+                        <div style={{ background: '#f0fff4', border: '1px solid #c3e6cb', borderRadius: '8px', padding: '14px', marginBottom: '14px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
+                          {[
+                            { label: 'Animales en corral', val: Number(corralSeleccionado?.animales_actuales || 0), color: '#1572e8' },
+                            { label: 'Kg por animal', val: corralSeleccionado && Number(corralSeleccionado.animales_actuales) > 0 ? (parseFloat(feedingForm.cantidad_kg) / Number(corralSeleccionado.animales_actuales)).toFixed(3) + ' kg' : '—', color: '#31ce36' },
+                            { label: 'Costo estimado', val: costoEstimado ? `$${parseFloat(costoEstimado).toLocaleString()}` : '—', color: '#ffad46' },
+                          ].map(kpi => (
+                            <div key={kpi.label} style={{ textAlign: 'center' }}>
+                              <div style={{ fontSize: '20px', fontWeight: '700', color: kpi.color }}>{kpi.val}</div>
+                              <div style={{ fontSize: '11px', color: '#6c757d', fontWeight: '600' }}>{kpi.label}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div style={{ marginBottom: '14px' }}>
+                        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', fontSize: '13px' }}>Observaciones</label>
+                        <input type="text" value={feedingForm.observaciones} onChange={e => setFeedingForm({...feedingForm, observaciones: e.target.value})} style={inp()} placeholder="Opcional..." />
+                      </div>
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <button type="submit" className="btn btn-success" disabled={feedingLoading}>
+                          <i className={`fas ${feedingLoading ? 'fa-spinner fa-spin' : 'fa-check'}`} style={{ marginRight: '8px' }}></i>
+                          {feedingLoading ? 'Guardando...' : 'Confirmar Alimentación'}
+                        </button>
+                        <button type="button" className="btn btn-secondary" onClick={() => setShowFeedingForm(false)}>Cancelar</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Filtros + botón */}
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#6c757d', marginBottom: '4px' }}>FECHA</label>
+                  <input type="date" value={filtroFecha} onChange={e => setFiltroFecha(e.target.value)} style={{ ...inp(), width: 160 }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#6c757d', marginBottom: '4px' }}>CORRAL</label>
+                  <select value={filtroCorral} onChange={e => setFiltroCorral(e.target.value)} style={{ ...inp(), width: 200 }}>
+                    <option value="">Todos los corrales</option>
+                    {corrales.map(c => <option key={c.id} value={c.id}>{c.nombre}{c.etiqueta ? ` — ${c.etiqueta}` : ''}</option>)}
+                  </select>
+                </div>
+                <button className="btn btn-primary" onClick={loadRegistros}>
+                  <i className="fas fa-search" style={{ marginRight: '6px' }}></i>Buscar
+                </button>
+                <button className="btn btn-success" style={{ marginLeft: 'auto' }} onClick={() => { setShowFeedingForm(true); }}>
+                  <i className="fas fa-plus" style={{ marginRight: '6px' }}></i>Registrar Alimentación
+                </button>
+              </div>
+
+              {/* Tabla registros */}
+              {registros.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
+                  <i className="fas fa-clipboard-list" style={{ fontSize: '48px', marginBottom: '15px', opacity: 0.4 }}></i>
+                  <h5>Sin registros para los filtros seleccionados</h5>
+                  <p style={{ fontSize: '13px' }}>Selecciona una fecha y presiona Buscar, o registra una nueva alimentación.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Resumen del día */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+                    {[
+                      { label: 'Registros', val: registros.length, color: '#1572e8', icon: 'fa-list' },
+                      { label: 'Total kg', val: registros.reduce((s,r) => s + parseFloat(r.cantidad_kg||0), 0).toFixed(1) + ' kg', color: '#31ce36', icon: 'fa-weight' },
+                      { label: 'Costo total', val: '$' + registros.reduce((s,r) => s + parseFloat(r.costo_total||0), 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}), color: '#ffad46', icon: 'fa-dollar-sign' },
+                      { label: 'Corrales', val: new Set(registros.map(r => r.ubicacion_id)).size, color: '#6f42c1', icon: 'fa-door-open' },
+                    ].map(kpi => (
+                      <div key={kpi.label} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '14px', textAlign: 'center' }}>
+                        <i className={`fas ${kpi.icon}`} style={{ color: kpi.color, marginBottom: '4px', fontSize: '16px' }}></i>
+                        <div style={{ fontSize: '20px', fontWeight: '700', color: kpi.color }}>{kpi.val}</div>
+                        <div style={{ fontSize: '11px', color: '#6c757d', fontWeight: '600' }}>{kpi.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="table-responsive">
+                    <table className="table">
+                      <thead>
+                        <tr style={{ background: '#f8f9fa' }}>
+                          <th>Fecha</th><th>Corral</th><th>Dieta</th><th>Cantidad</th><th>Kg/animal</th><th>Costo total</th><th>Responsable</th><th>Obs.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {registros.map(r => {
+                          const animales = Number(corrales.find(c => c.id === r.ubicacion_id)?.animales_actuales || 0);
+                          const kgAnimal = animales > 0 ? (parseFloat(r.cantidad_kg) / animales).toFixed(3) : '—';
+                          return (
+                            <tr key={r.id}>
+                              <td style={{ whiteSpace: 'nowrap' }}>{parseDate(r.fecha_suministro).toLocaleDateString()}</td>
+                              <td style={{ fontWeight: '600' }}>{r.ubicacion_nombre}</td>
+                              <td>
+                                <span style={{ background: '#e8f4fd', color: '#1572e8', borderRadius: '10px', padding: '2px 8px', fontSize: '12px', fontWeight: '600' }}>
+                                  {r.dieta_nombre}
+                                </span>
+                              </td>
+                              <td style={{ fontWeight: '700', color: '#1572e8' }}>{parseFloat(r.cantidad_kg).toFixed(1)} kg</td>
+                              <td style={{ color: '#31ce36', fontWeight: '600' }}>{kgAnimal} {kgAnimal !== '—' ? 'kg' : ''}</td>
+                              <td style={{ fontWeight: '600', color: '#ffad46' }}>${parseFloat(r.costo_total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                              <td style={{ fontSize: '12px', color: '#6c757d' }}>{r.responsable_nombre}</td>
+                              <td style={{ fontSize: '12px', color: '#6c757d', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.observaciones || '—'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
