@@ -293,7 +293,6 @@ const NutritionComplete: React.FC = () => {
     return sum + (d && !isNaN(kg) ? parseFloat(d.costo_por_kg as any) * kg : 0);
   }, 0);
 
-  const corralSeleccionado = corrales.find(c => c.id === parseInt(feedingForm.ubicacion_id));
 
   const handleSort = (col: string) => {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
