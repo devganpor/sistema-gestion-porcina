@@ -140,7 +140,7 @@ const Animals: React.FC = () => {
   const loadAnimals = async () => {
     try {
       const response = await api.get('/animals');
-      setAnimals(response.data);
+      setAnimals(response.data.filter((a: Animal) => a.estado !== 'eliminado'));
     } catch (error) {
       console.error('Error cargando animales:', error);
     } finally {

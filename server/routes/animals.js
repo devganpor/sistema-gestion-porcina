@@ -435,37 +435,36 @@ router.put('/:id', authenticateToken, async (req, res) => {
 });
 
 router.delete('/:id', authenticateToken, async (req, res) => {
+  const client = await require('../config/database-pg').pool.connect();
   try {
     const { id } = req.params;
 
-    const animalRes = await query('SELECT id FROM animales WHERE id=$1', [id]);
+    const animalRes = await client.query('SELECT id FROM animales WHERE id=$1', [id]);
     if (animalRes.rows.length === 0) return res.status(404).json({ error: 'Animal no encontrado' });
 
-    const checks = await Promise.all([
-      query('SELECT COUNT(*) as count FROM pesajes WHERE animal_id = $1', [id]),
-      query('SELECT COUNT(*) as count FROM eventos_sanitarios WHERE animal_id = $1', [id]),
-      query('SELECT COUNT(*) as count FROM gastos WHERE animal_id = $1', [id]),
-      query('SELECT COUNT(*) as count FROM movimientos_ubicacion WHERE animal_id = $1', [id]),
-      query('SELECT COUNT(*) as count FROM ciclos_reproductivos WHERE cerda_id = $1', [id]),
-      query('SELECT COUNT(*) as count FROM alimentacion_animal WHERE animal_id = $1', [id]),
-      query('SELECT COUNT(*) as count FROM ingresos WHERE animal_id = $1', [id]),
-    ]);
+    await client.query('BEGIN');
+    await client.query('DELETE FROM tratamientos WHERE evento_sanitario_id IN (SELECT id FROM eventos_sanitarios WHERE animal_id=$1)', [id]);
+    await client.query('DELETE FROM alimentacion_animal WHERE animal_id=$1', [id]);
+    await client.query('DELETE FROM movimientos_ubicacion WHERE animal_id=$1', [id]);
+    await client.query('DELETE FROM indices_geneticos WHERE animal_id=$1', [id]);
+    await client.query('DELETE FROM ciclos_reproductivos WHERE cerda_id=$1 OR verraco_id=$1', [id, id]);
+    await client.query('DELETE FROM vacunaciones WHERE animal_id=$1', [id]);
+    await client.query('DELETE FROM eventos_sanitarios WHERE animal_id=$1', [id]);
+    await client.query('DELETE FROM pesajes WHERE animal_id=$1', [id]);
+    await client.query('DELETE FROM gastos WHERE animal_id=$1', [id]);
+    await client.query('DELETE FROM ingresos WHERE animal_id=$1', [id]);
+    await client.query('UPDATE animales SET madre_id=NULL WHERE madre_id=$1', [id]);
+    await client.query('UPDATE animales SET padre_id=NULL WHERE padre_id=$1', [id]);
+    await client.query('DELETE FROM animales WHERE id=$1', [id]);
+    await client.query('COMMIT');
 
-    const tieneRegistros = checks.some(r => parseInt(r.rows[0].count) > 0);
-
-    if (tieneRegistros) {
-      await query(
-        'UPDATE animales SET estado=$1, fecha_salida=$2, motivo_salida=$3 WHERE id=$4',
-        ['eliminado', new Date().toISOString().split('T')[0], 'Eliminado del sistema', id]
-      );
-      res.json({ message: 'Animal marcado como eliminado (tiene registros asociados)' });
-    } else {
-      await query('DELETE FROM animales WHERE id=$1', [id]);
-      res.json({ message: 'Animal eliminado completamente' });
-    }
+    res.json({ message: 'Animal eliminado completamente' });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('DELETE animal error:', error);
     res.status(500).json({ error: error.message || 'Error eliminando animal' });
+  } finally {
+    client.release();
   }
 });
 
