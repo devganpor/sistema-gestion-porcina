@@ -145,7 +145,7 @@ const GalponView: React.FC<Props> = ({ galpon, corrales, onClose }) => {
                 hasObs={showObs && !!a.observaciones}
               />
               {showIds && (
-                <div style={{ fontSize: 6, color: '#555', textAlign: 'center', lineHeight: 1, marginTop: 1, width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+                <div style={{ fontSize: 8, color: '#444', textAlign: 'center', lineHeight: 1, marginTop: 1, width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', fontWeight: 600 }}>
                   {a.identificador_unico}
                 </div>
               )}
