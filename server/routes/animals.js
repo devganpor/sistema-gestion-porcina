@@ -94,6 +94,7 @@ router.post('/bulk', authenticateToken, asyncHandler(async (req, res) => {
 
   const results = [];
   const toInsert = [];
+  const razasNuevas = new Map(); // key: nombre lowercase, value: nombre original
 
   animales.forEach((row, i) => {
     const fila = i + 2; // fila Excel (encabezado = 1)
@@ -123,14 +124,18 @@ router.post('/bulk', authenticateToken, asyncHandler(async (req, res) => {
     let peso_nacimiento = null;
     if (row.peso_nacimiento !== undefined && row.peso_nacimiento !== '') {
       const p = parseFloat(row.peso_nacimiento);
-      if (isNaN(p) || p <= 0 || p > 10) errores.push('peso_nacimiento debe ser número entre 0 y 10');
+      if (isNaN(p) || p <= 0 || p > 30) errores.push('peso_nacimiento debe ser número entre 0 y 30');
       else peso_nacimiento = p;
     }
 
     let raza_id = null;
     if (row.raza) {
-      raza_id = razaMap.get(row.raza.toString().trim().toLowerCase()) || null;
-      if (!raza_id) errores.push(`raza '${row.raza}' no encontrada (use nombre exacto)`);
+      const razaKey = row.raza.toString().trim().toLowerCase();
+      raza_id = razaMap.get(razaKey) || null;
+      // Si no existe, se creará automáticamente al insertar
+      if (!raza_id) {
+        razasNuevas.set(razaKey, row.raza.toString().trim());
+      }
     }
 
     let ubicacion_actual_id = null;
@@ -166,7 +171,9 @@ router.post('/bulk', authenticateToken, asyncHandler(async (req, res) => {
         identificador_unico: id,
         nombre: (row.nombre || '').toString().trim() || null,
         sexo, categoria, estado,
-        fecha_nacimiento, peso_nacimiento, raza_id, ubicacion_actual_id,
+        fecha_nacimiento, peso_nacimiento, raza_id,
+        raza_key: row.raza ? row.raza.toString().trim().toLowerCase() : null,
+        ubicacion_actual_id,
         origen, valor_compra, fecha_ingreso,
         observaciones: (row.observaciones || '').toString().trim() || null
       });
@@ -178,6 +185,22 @@ router.post('/bulk', authenticateToken, asyncHandler(async (req, res) => {
     const client = await require('../config/database-pg').pool.connect();
     try {
       await client.query('BEGIN');
+
+      // Crear razas nuevas y actualizar el map
+      for (const [key, nombre] of razasNuevas) {
+        const r = await client.query(
+          `INSERT INTO razas (nombre) VALUES ($1) ON CONFLICT (nombre) DO UPDATE SET nombre=EXCLUDED.nombre RETURNING id`,
+          [nombre]
+        );
+        razaMap.set(key, r.rows[0].id);
+      }
+
+      // Resolver raza_id para animales que tenían raza nueva
+      for (const a of toInsert) {
+        if (a.raza_key && !a.raza_id) {
+          a.raza_id = razaMap.get(a.raza_key) || null;
+        }
+      }
       for (const a of toInsert) {
         try {
           await client.query(
