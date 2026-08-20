@@ -587,7 +587,14 @@ const Animals: React.FC = () => {
               <tbody>
                 {filteredAnimals.map(animal => (
                   <tr key={animal.id}>
-                    <td style={{ fontWeight: '600' }}>{animal.identificador_unico}</td>
+                    <td style={{ fontWeight: '600' }}>
+                        {animal.identificador_unico}
+                        {animal.observaciones && (
+                          <span title={animal.observaciones} style={{ marginLeft: '6px', cursor: 'help' }}>
+                            <i className="fas fa-exclamation-circle" style={{ color: '#ffad46', fontSize: '13px' }} />
+                          </span>
+                        )}
+                      </td>
                     <td>{animal.nombre || '-'}</td>
                     <td>
                       <span style={{
