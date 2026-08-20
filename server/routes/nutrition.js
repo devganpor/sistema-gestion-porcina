@@ -122,9 +122,28 @@ router.put('/ingredients/:id/stock', authenticateToken, async (req, res) => {
   }
 });
 
+router.delete('/feeding/:id', authenticateToken, async (req, res) => {
+  try {
+    await query('DELETE FROM alimentacion_animal WHERE registro_alimentacion_id=$1', [req.params.id]);
+    await query('DELETE FROM registro_alimentacion WHERE id=$1', [req.params.id]);
+    res.json({ message: 'Registro eliminado' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error eliminando registro' });
+  }
+});
+
 router.post('/feeding', authenticateToken, async (req, res) => {
   try {
     const { ubicacion_id, dieta_id, cantidad_kg, fecha_suministro, hora_suministro, observaciones } = req.body;
+
+    // Validar: un solo registro por corral por día
+    const duplicado = await query(
+      `SELECT id FROM registro_alimentacion WHERE ubicacion_id=$1 AND fecha_suministro=$2 LIMIT 1`,
+      [ubicacion_id, fecha_suministro]
+    );
+    if (duplicado.rows.length > 0) {
+      return res.status(409).json({ error: 'Este corral ya tiene alimentación registrada para esa fecha. Solo se permite un registro por corral por día.' });
+    }
 
     // Obtener costo_por_kg de la dieta
     const dietaRes = await query('SELECT nombre, costo_por_kg FROM dietas WHERE id=$1', [dieta_id]);
@@ -194,8 +213,10 @@ router.get('/feeding', authenticateToken, async (req, res) => {
     if (fecha_fin)    { params.push(fecha_fin);    conditions += ` AND ra.fecha_suministro <= $${params.length}`; }
     if (ubicacion_id) { params.push(ubicacion_id); conditions += ` AND ra.ubicacion_id = $${params.length}`; }
 
+    // DISTINCT ON (ubicacion_id, fecha_suministro) elimina duplicados mostrando solo el más reciente
     const registros = await query(`
-      SELECT ra.*, u.nombre as ubicacion_nombre, d.nombre as dieta_nombre, d.costo_por_kg,
+      SELECT DISTINCT ON (ra.ubicacion_id, ra.fecha_suministro)
+        ra.*, u.nombre as ubicacion_nombre, d.nombre as dieta_nombre, d.costo_por_kg,
         (ra.cantidad_kg * d.costo_por_kg) as costo_total,
         us.nombre as responsable_nombre
       FROM registro_alimentacion ra
@@ -203,7 +224,7 @@ router.get('/feeding', authenticateToken, async (req, res) => {
       JOIN dietas d ON ra.dieta_id = d.id
       JOIN usuarios us ON ra.responsable_id = us.id
       WHERE 1=1${conditions}
-      ORDER BY ra.fecha_suministro DESC
+      ORDER BY ra.ubicacion_id, ra.fecha_suministro DESC, ra.id DESC
     `, params);
     res.json(registros.rows);
   } catch (error) {

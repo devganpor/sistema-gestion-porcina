@@ -232,7 +232,12 @@ const NutritionComplete: React.FC = () => {
       loadRegistros();
       setTimeout(() => setSuccess(''), 5000);
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Error registrando alimentación');
+      const msg = err.response?.data?.error || 'Error registrando alimentación';
+      if (err.response?.status === 409) {
+        alert(`⚠️ ${msg}`);
+      } else {
+        alert(msg);
+      }
     } finally { setFeedingLoading(false); }
   };
 
@@ -1175,7 +1180,7 @@ const NutritionComplete: React.FC = () => {
                     <table className="table">
                       <thead>
                         <tr style={{ background: '#f8f9fa' }}>
-                          <th>Fecha</th><th>Corral</th><th>Dieta</th><th>Cantidad</th><th>Kg/animal</th><th>Costo total</th><th>Responsable</th><th>Obs.</th>
+                          <th>Fecha</th><th>Corral</th><th>Dieta</th><th>Cantidad</th><th>Kg/animal</th><th>Costo total</th><th>Responsable</th><th>Obs.</th><th></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1196,6 +1201,12 @@ const NutritionComplete: React.FC = () => {
                               <td style={{ fontWeight: '600', color: '#ffad46' }}>${parseFloat(r.costo_total||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                               <td style={{ fontSize: '12px', color: '#6c757d' }}>{r.responsable_nombre}</td>
                               <td style={{ fontSize: '12px', color: '#6c757d', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.observaciones || '—'}</td>
+                              <td>
+                                <button className="btn btn-danger btn-sm" title="Eliminar registro" onClick={async () => {
+                                  if (!window.confirm(`¿Eliminar el registro de ${r.ubicacion_nombre} del ${parseDate(r.fecha_suministro).toLocaleDateString()}?`)) return;
+                                  try { await api.delete(`/nutrition/feeding/${r.id}`); loadRegistros(); } catch { alert('Error eliminando registro'); }
+                                }}><i className="fas fa-trash"></i></button>
+                              </td>
                             </tr>
                           );
                         })}
