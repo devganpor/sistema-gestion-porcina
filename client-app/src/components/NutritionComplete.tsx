@@ -119,11 +119,11 @@ const NutritionComplete: React.FC = () => {
   const [feedingLoading, setFeedingLoading] = useState(false);
   const [feedingForm, setFeedingForm] = useState({
     fecha: new Date().toISOString().split('T')[0],
-    ubicacion_id: '',
     dieta_id: '',
-    cantidad_kg: '',
     observaciones: ''
   });
+  // corrales seleccionados para registro en lote: { corral_id, cantidad_kg, dieta_id }
+  const [feedingRows, setFeedingRows] = useState<{corral_id:number; cantidad_kg:string; dieta_id:string}[]>([]);
   const today = new Date().toISOString().split('T')[0];
   const [filtroFechaInicio, setFiltroFechaInicio] = useState('2026-07-31');
   const [filtroFechaFin, setFiltroFechaFin] = useState(today);
@@ -219,50 +219,79 @@ const NutritionComplete: React.FC = () => {
 
   const handleFeedingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!feedingForm.ubicacion_id || !feedingForm.dieta_id || !feedingForm.cantidad_kg) {
-      alert('Completa corral, dieta y cantidad'); return;
-    }
+    if (feedingRows.length === 0) { alert('Agrega al menos un corral'); return; }
     setFeedingLoading(true);
-    try {
-      const res = await api.post('/nutrition/feeding', {
-        ubicacion_id: parseInt(feedingForm.ubicacion_id),
-        dieta_id: parseInt(feedingForm.dieta_id),
-        cantidad_kg: parseFloat(feedingForm.cantidad_kg),
-        fecha_suministro: feedingForm.fecha,
-        observaciones: feedingForm.observaciones || null
-      });
-      setSuccess(`✅ Alimentación registrada — ${res.data.animales_distribuidos} animales · ${res.data.kg_por_animal} kg/animal`);
+    let ok = 0; let errors: string[] = [];
+    for (const row of feedingRows) {
+      try {
+        await api.post('/nutrition/feeding', {
+          ubicacion_id: row.corral_id,
+          dieta_id: parseInt(row.dieta_id),
+          cantidad_kg: parseFloat(row.cantidad_kg),
+          fecha_suministro: feedingForm.fecha,
+          observaciones: feedingForm.observaciones || null
+        });
+        ok++;
+      } catch (err: any) {
+        const corral = corralesConAnimales.find(c => c.id === row.corral_id);
+        const msg = err.response?.data?.error || 'Error';
+        errors.push(`${corral?.nombre || row.corral_id}: ${msg}`);
+      }
+    }
+    setFeedingLoading(false);
+    if (ok > 0) {
+      setSuccess(`${ok} registro${ok > 1 ? 's' : ''} de alimentación guardado${ok > 1 ? 's' : ''}`);
       setShowFeedingForm(false);
-      setFeedingForm({ fecha: new Date().toISOString().split('T')[0], ubicacion_id: '', dieta_id: '', cantidad_kg: '', observaciones: '' });
+      setFeedingRows([]);
+      setFeedingForm({ fecha: new Date().toISOString().split('T')[0], dieta_id: '', observaciones: '' });
       loadRegistros();
       setTimeout(() => setSuccess(''), 5000);
-    } catch (err: any) {
-      const msg = err.response?.data?.error || 'Error registrando alimentación';
-      if (err.response?.status === 409) {
-        alert(`⚠️ ${msg}`);
-      } else {
-        alert(msg);
-      }
-    } finally { setFeedingLoading(false); }
+    }
+    if (errors.length > 0) alert('Errores:\n' + errors.join('\n'));
   };
+  // Corrales con animales (>0) para el formulario
+  const corralesConAnimales = corrales.filter(c => Number(c.animales_actuales) > 0);
 
-  // Auto-calcular cantidad cuando cambia corral o fecha usando etapas de planes
-  useEffect(() => {
-    if (!feedingForm.ubicacion_id || !feedingForm.fecha || todasEtapas.length === 0) return;
-    const corral = corrales.find(c => c.id === parseInt(feedingForm.ubicacion_id));
-    if (!corral) return;
+  // Sugerir dieta y cantidad para un corral en una fecha dada
+  const getSugerencia = (corralId: number, fecha: string) => {
+    const corral = corralesConAnimales.find(c => c.id === corralId);
+    if (!corral) return { dieta_id: '', cantidad_kg: '' };
     const animales = Number(corral.animales_actuales);
-    if (animales === 0) return;
-    const fechaSel = new Date(feedingForm.fecha + 'T00:00:00');
-    const etapaActiva = todasEtapas.find(e => {
+    const fechaSel = new Date(fecha + 'T00:00:00');
+    const etapa = todasEtapas.find(e => {
       const ini = new Date(e.fecha_inicio + 'T00:00:00');
       const fin = new Date(e.fecha_fin + 'T00:00:00');
       return fechaSel >= ini && fechaSel <= fin;
     });
-    if (etapaActiva) {
-      setFeedingForm(prev => ({ ...prev, cantidad_kg: (etapaActiva.cad_kg_animal * animales).toFixed(1) }));
-    }
-  }, [feedingForm.ubicacion_id, feedingForm.fecha, todasEtapas, corrales]); // eslint-disable-line
+    return {
+      dieta_id: etapa?.dieta_id ? String(etapa.dieta_id) : '',
+      cantidad_kg: etapa && animales > 0 ? (etapa.cad_kg_animal * animales).toFixed(1) : ''
+    };
+  };
+
+  // Agregar corrales al lote (uno o todos)
+  const addCorralToRows = (corralId: number | 'all') => {
+    const targets = corralId === 'all'
+      ? corralesConAnimales.filter(c => !feedingRows.some(r => r.corral_id === c.id))
+      : corralesConAnimales.filter(c => c.id === corralId && !feedingRows.some(r => r.corral_id === c.id));
+    const newRows = targets.map(c => {
+      const sug = getSugerencia(c.id, feedingForm.fecha);
+      return { corral_id: c.id, dieta_id: sug.dieta_id, cantidad_kg: sug.cantidad_kg };
+    });
+    setFeedingRows(prev => [...prev, ...newRows]);
+  };
+
+  const updateFeedingRow = (idx: number, field: 'dieta_id'|'cantidad_kg', val: string) => {
+    setFeedingRows(prev => prev.map((r, i) => i === idx ? {...r, [field]: val} : r));
+  };
+
+  const removeRow = (idx: number) => setFeedingRows(prev => prev.filter((_, i) => i !== idx));
+
+  const costoTotalLote = feedingRows.reduce((sum, row) => {
+    const d = diets.find(d => d.id === parseInt(row.dieta_id));
+    const kg = parseFloat(row.cantidad_kg);
+    return sum + (d && !isNaN(kg) ? parseFloat(d.costo_por_kg as any) * kg : 0);
+  }, 0);
 
   const corralSeleccionado = corrales.find(c => c.id === parseInt(feedingForm.ubicacion_id));
 
@@ -1097,61 +1126,148 @@ const NutritionComplete: React.FC = () => {
                   </div>
                   <div style={{ padding: '20px' }}>
                     <form onSubmit={handleFeedingSubmit}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '14px' }}>
+                      {/* Fila superior: fecha + observaciones */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr auto', gap: '12px', alignItems: 'flex-end', marginBottom: '16px' }}>
                         <div>
                           <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', fontSize: '13px' }}>Fecha *</label>
-                          <input type="date" value={feedingForm.fecha} onChange={e => setFeedingForm({...feedingForm, fecha: e.target.value})} style={inp()} required />
+                          <input type="date" value={feedingForm.fecha}
+                            onChange={e => { setFeedingForm({...feedingForm, fecha: e.target.value}); setFeedingRows([]); }}
+                            style={inp()} required />
                         </div>
                         <div>
-                          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', fontSize: '13px' }}>Corral *</label>
-                          <select value={feedingForm.ubicacion_id} onChange={e => setFeedingForm({...feedingForm, ubicacion_id: e.target.value})} style={inp()} required>
-                            <option value="">— Seleccionar corral —</option>
-                            {corrales.map(c => (
-                              <option key={c.id} value={c.id}>{c.nombre}{c.etiqueta ? ` — ${c.etiqueta}` : ''} ({Number(c.animales_actuales)} animales)</option>
-                            ))}
-                          </select>
+                          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', fontSize: '13px' }}>Observaciones (aplica a todos)</label>
+                          <input type="text" value={feedingForm.observaciones}
+                            onChange={e => setFeedingForm({...feedingForm, observaciones: e.target.value})}
+                            style={inp()} placeholder="Opcional..." />
                         </div>
-                        <div>
-                          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', fontSize: '13px' }}>Dieta *</label>
-                          <select value={feedingForm.dieta_id} onChange={e => setFeedingForm({...feedingForm, dieta_id: e.target.value})} style={inp()} required>
-                            <option value="">— Seleccionar dieta —</option>
-                            {diets.map(d => (
-                              <option key={d.id} value={d.id}>{d.nombre} ({d.categoria_animal}) — ${parseFloat(d.costo_por_kg as any).toFixed(3)}/kg</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', fontSize: '13px' }}>Cantidad total (kg) *</label>
-                          <input type="number" step="0.1" min="0.1" value={feedingForm.cantidad_kg} onChange={e => setFeedingForm({...feedingForm, cantidad_kg: e.target.value})} style={inp()} placeholder="Ej: 120" required />
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button type="button" className="btn btn-primary btn-sm"
+                            onClick={() => addCorralToRows('all')}
+                            title="Agregar todos los corrales con animales">
+                            <i className="fas fa-layer-group" style={{ marginRight: '6px' }}></i>Todos los corrales
+                          </button>
                         </div>
                       </div>
 
-                      {/* Preview en tiempo real */}
-                      {feedingForm.ubicacion_id && feedingForm.dieta_id && feedingForm.cantidad_kg && (
-                        <div style={{ background: '#f0fff4', border: '1px solid #c3e6cb', borderRadius: '8px', padding: '14px', marginBottom: '14px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
-                          {[
-                            { label: 'Animales en corral', val: Number(corralSeleccionado?.animales_actuales || 0), color: '#1572e8' },
-                            { label: 'Kg por animal', val: corralSeleccionado && Number(corralSeleccionado.animales_actuales) > 0 ? (parseFloat(feedingForm.cantidad_kg) / Number(corralSeleccionado.animales_actuales)).toFixed(3) + ' kg' : '—', color: '#31ce36' },
-                            { label: 'Costo estimado', val: costoEstimado ? `$${parseFloat(costoEstimado).toFixed(3)}` : '—', color: '#ffad46' },
-                          ].map(kpi => (
-                            <div key={kpi.label} style={{ textAlign: 'center' }}>
-                              <div style={{ fontSize: '20px', fontWeight: '700', color: kpi.color }}>{kpi.val}</div>
-                              <div style={{ fontSize: '11px', color: '#6c757d', fontWeight: '600' }}>{kpi.label}</div>
-                            </div>
-                          ))}
+                      {/* Selector para agregar corral individual */}
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '14px' }}>
+                        <select style={{ ...inp(), flex: 1, maxWidth: '320px' }}
+                          value=""
+                          onChange={e => { if (e.target.value) { addCorralToRows(parseInt(e.target.value)); e.target.value = ''; } }}>
+                          <option value="">+ Agregar corral...</option>
+                          {corralesConAnimales
+                            .filter(c => !feedingRows.some(r => r.corral_id === c.id))
+                            .map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.nombre}{c.etiqueta ? ` — ${c.etiqueta}` : ''} ({Number(c.animales_actuales)} animales)
+                              </option>
+                            ))}
+                        </select>
+                        <span style={{ fontSize: '12px', color: '#6c757d' }}>
+                          {corralesConAnimales.length} corrales disponibles
+                        </span>
+                      </div>
+
+                      {/* Tabla de corrales seleccionados */}
+                      {feedingRows.length > 0 && (
+                        <div style={{ marginBottom: '16px' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                            <thead>
+                              <tr style={{ background: '#f0f4ff', borderBottom: '2px solid #dee2e6' }}>
+                                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '600' }}>Corral</th>
+                                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: '600' }}>Animales</th>
+                                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '600' }}>Dieta *</th>
+                                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '600' }}>Cantidad (kg) *</th>
+                                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: '600' }}>Kg/animal</th>
+                                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: '600' }}>Sacos</th>
+                                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: '600' }}>Costo est.</th>
+                                <th style={{ padding: '8px 4px' }}></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {feedingRows.map((row, idx) => {
+                                const corral = corralesConAnimales.find(c => c.id === row.corral_id);
+                                const animales = Number(corral?.animales_actuales || 0);
+                                const kg = parseFloat(row.cantidad_kg);
+                                const dieta = diets.find(d => d.id === parseInt(row.dieta_id));
+                                const kgAnimal = animales > 0 && !isNaN(kg) ? (kg / animales).toFixed(3) : '—';
+                                const sacos = !isNaN(kg) ? Math.ceil(kg / 40) : '—';
+                                const costo = dieta && !isNaN(kg) ? (parseFloat(dieta.costo_por_kg as any) * kg).toFixed(3) : '—';
+                                const hasSugerencia = getSugerencia(row.corral_id, feedingForm.fecha).cantidad_kg !== '';
+                                return (
+                                  <tr key={row.corral_id} style={{ borderBottom: '1px solid #ebedf2', background: idx % 2 === 0 ? '#fff' : '#fafbff' }}>
+                                    <td style={{ padding: '8px 10px', fontWeight: '600' }}>
+                                      {corral?.nombre}
+                                      {hasSugerencia && <span style={{ marginLeft: '6px', fontSize: '10px', background: '#d4edda', color: '#155724', borderRadius: '8px', padding: '1px 6px' }}>plan</span>}
+                                    </td>
+                                    <td style={{ padding: '8px 10px', textAlign: 'center', color: '#1572e8', fontWeight: '700' }}>{animales}</td>
+                                    <td style={{ padding: '6px 8px' }}>
+                                      <select value={row.dieta_id} onChange={e => updateFeedingRow(idx, 'dieta_id', e.target.value)}
+                                        style={{ ...inp(), padding: '5px 8px', fontSize: '12px', minWidth: '160px' }} required>
+                                        <option value="">— Dieta —</option>
+                                        {diets.map(d => (
+                                          <option key={d.id} value={d.id}>{d.nombre} · ${parseFloat(d.costo_por_kg as any).toFixed(3)}/kg</option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                    <td style={{ padding: '6px 8px' }}>
+                                      <input type="number" step="0.1" min="0.1" value={row.cantidad_kg}
+                                        onChange={e => updateFeedingRow(idx, 'cantidad_kg', e.target.value)}
+                                        style={{ ...inp(), padding: '5px 8px', fontSize: '12px', width: '90px' }} required />
+                                    </td>
+                                    <td style={{ padding: '8px 10px', textAlign: 'center', color: '#31ce36', fontWeight: '600' }}>{kgAnimal}</td>
+                                    <td style={{ padding: '8px 10px', textAlign: 'center', color: '#20c997', fontWeight: '700' }}>{sacos}</td>
+                                    <td style={{ padding: '8px 10px', textAlign: 'center', color: '#ffad46', fontWeight: '600' }}>{costo !== '—' ? `$${costo}` : '—'}</td>
+                                    <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                                      <button type="button" className="btn btn-danger btn-sm" onClick={() => removeRow(idx)} title="Quitar">
+                                        <i className="fas fa-times"></i>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            {feedingRows.length > 1 && (
+                              <tfoot>
+                                <tr style={{ background: '#f0f4ff', fontWeight: '700', borderTop: '2px solid #dee2e6' }}>
+                                  <td colSpan={2} style={{ padding: '8px 10px' }}>TOTAL ({feedingRows.length} corrales)</td>
+                                  <td></td>
+                                  <td style={{ padding: '8px 10px', color: '#1572e8' }}>
+                                    {feedingRows.reduce((s, r) => s + (parseFloat(r.cantidad_kg) || 0), 0).toFixed(1)} kg
+                                  </td>
+                                  <td></td>
+                                  <td style={{ padding: '8px 10px', textAlign: 'center', color: '#20c997' }}>
+                                    {Math.ceil(feedingRows.reduce((s, r) => s + (parseFloat(r.cantidad_kg) || 0), 0) / 40)} sacos
+                                  </td>
+                                  <td style={{ padding: '8px 10px', textAlign: 'center', color: '#ffad46' }}>
+                                    ${costoTotalLote.toFixed(3)}
+                                  </td>
+                                  <td></td>
+                                </tr>
+                              </tfoot>
+                            )}
+                          </table>
                         </div>
                       )}
 
-                      <div style={{ marginBottom: '14px' }}>
-                        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', fontSize: '13px' }}>Observaciones</label>
-                        <input type="text" value={feedingForm.observaciones} onChange={e => setFeedingForm({...feedingForm, observaciones: e.target.value})} style={inp()} placeholder="Opcional..." />
-                      </div>
-                      <div style={{ display: 'flex', gap: '10px' }}>
-                        <button type="submit" className="btn btn-success" disabled={feedingLoading}>
+                      {feedingRows.length === 0 && (
+                        <div style={{ textAlign: 'center', padding: '24px', color: '#6c757d', background: '#f8f9fa', borderRadius: '8px', marginBottom: '16px', border: '2px dashed #dee2e6' }}>
+                          <i className="fas fa-plus-circle" style={{ fontSize: '28px', marginBottom: '8px', opacity: 0.4 }}></i>
+                          <p style={{ margin: 0, fontSize: '13px' }}>Selecciona corrales arriba o usa "Todos los corrales"</p>
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <button type="submit" className="btn btn-success" disabled={feedingLoading || feedingRows.length === 0}>
                           <i className={`fas ${feedingLoading ? 'fa-spinner fa-spin' : 'fa-check'}`} style={{ marginRight: '8px' }}></i>
-                          {feedingLoading ? 'Guardando...' : 'Confirmar Alimentación'}
+                          {feedingLoading ? 'Guardando...' : `Confirmar ${feedingRows.length > 1 ? feedingRows.length + ' registros' : 'alimentación'}`}
                         </button>
-                        <button type="button" className="btn btn-secondary" onClick={() => setShowFeedingForm(false)}>Cancelar</button>
+                        <button type="button" className="btn btn-secondary" onClick={() => { setShowFeedingForm(false); setFeedingRows([]); }}>Cancelar</button>
+                        {feedingRows.length > 0 && (
+                          <span style={{ fontSize: '12px', color: '#6c757d', marginLeft: 'auto' }}>
+                            {feedingRows.filter(r => r.dieta_id && r.cantidad_kg).length}/{feedingRows.length} corrales completos
+                          </span>
+                        )}
                       </div>
                     </form>
                   </div>
