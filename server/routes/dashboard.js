@@ -46,13 +46,8 @@ router.get('/costs', authenticateToken, asyncHandler(async (req, res) => {
     `),
     // Valor compra animales activos + vendidos
     query(`SELECT COALESCE(SUM(valor_compra), 0) as total FROM animales WHERE valor_compra > 0`),
-    // Costos sanitarios: eventos + vacunaciones (costo) + medicamentos usados
-    query(`
-      SELECT
-        COALESCE((SELECT SUM(costo) FROM eventos_sanitarios WHERE costo > 0), 0) +
-        COALESCE((SELECT SUM(costo_aplicacion) FROM vacunaciones WHERE costo_aplicacion > 0), 0)
-      AS total
-    `),
+    // Costos sanitarios: solo eventos_sanitarios (vacunaciones no tiene columna costo)
+    query(`SELECT COALESCE(SUM(costo), 0) as total FROM eventos_sanitarios WHERE costo > 0`),
     // Gastos directos registrados en tabla gastos
     query(`SELECT COALESCE(SUM(monto), 0) as total FROM gastos`),
     // Alimentacion mes actual
@@ -70,12 +65,7 @@ router.get('/costs', authenticateToken, asyncHandler(async (req, res) => {
     // Animales comprados este mes
     query(`SELECT COALESCE(SUM(valor_compra), 0) as total FROM animales WHERE valor_compra > 0 AND fecha_ingreso >= DATE_TRUNC('month', CURRENT_DATE)`),
     // Sanidad este mes
-    query(`
-      SELECT
-        COALESCE((SELECT SUM(costo) FROM eventos_sanitarios WHERE costo > 0 AND fecha >= DATE_TRUNC('month', CURRENT_DATE)), 0) +
-        COALESCE((SELECT SUM(costo_aplicacion) FROM vacunaciones WHERE costo_aplicacion > 0 AND fecha_aplicacion >= DATE_TRUNC('month', CURRENT_DATE)), 0)
-      AS total
-    `),
+    query(`SELECT COALESCE(SUM(costo), 0) as total FROM eventos_sanitarios WHERE costo > 0 AND fecha >= DATE_TRUNC('month', CURRENT_DATE)`),
     // Gastos directos este mes
     query(`SELECT COALESCE(SUM(monto), 0) as total FROM gastos WHERE fecha >= DATE_TRUNC('month', CURRENT_DATE)`)
   ]);
