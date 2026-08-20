@@ -128,6 +128,23 @@ router.get('/occupancy', authenticateToken, async (req, res) => {
   }
 });
 
+router.get('/:id/animals', authenticateToken, async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT a.id, a.identificador_unico, a.nombre, a.categoria, a.sexo,
+             a.estado, a.observaciones, a.peso_nacimiento, a.fecha_nacimiento,
+             r.nombre as raza_nombre
+      FROM animales a
+      LEFT JOIN razas r ON a.raza_id = r.id
+      WHERE a.ubicacion_actual_id = $1 AND a.estado != 'eliminado'
+      ORDER BY a.identificador_unico
+    `, [req.params.id]);
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Error obteniendo animales del corral' });
+  }
+});
+
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { nombre, tipo, capacidad_maxima, descripcion, secuencia, etiqueta, granja_id, galpon_id } = req.body;

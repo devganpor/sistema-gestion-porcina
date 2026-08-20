@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/authService';
+import GalponView from './GalponView';
 
 interface Ubicacion {
   id: number;
@@ -66,6 +67,7 @@ const Locations: React.FC = () => {
     motivo: '',
   });
   const [loadingSeq, setLoadingSeq] = useState(false);
+  const [galponView, setGalponView] = useState<Ubicacion | null>(null);
 
   useEffect(() => {
     loadUbicaciones();
@@ -505,6 +507,16 @@ const Locations: React.FC = () => {
                       <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                         <button className="btn btn-warning btn-sm" onClick={() => handleEdit(u)} title="Editar">✏️</button>
                         <button className="btn btn-danger btn-sm" onClick={() => handleDelete(u.id)} title="Eliminar">🗑️</button>
+                        {u.tipo === 'galpon' && (
+                          <button
+                            className="btn btn-sm"
+                            title="Ver plano del galpón"
+                            style={{ background: '#6f42c1', color: 'white' }}
+                            onClick={() => setGalponView(u)}
+                          >
+                            <i className="fas fa-th" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))
@@ -514,6 +526,15 @@ const Locations: React.FC = () => {
           );
         })}
       </div>
+
+      {/* Vista 2D Galpón */}
+      {galponView && (
+        <GalponView
+          galpon={galponView}
+          corrales={ubicaciones.filter(u => u.tipo === 'corral' && u.galpon_id === galponView.id)}
+          onClose={() => setGalponView(null)}
+        />
+      )}
     </div>
   );
 };
