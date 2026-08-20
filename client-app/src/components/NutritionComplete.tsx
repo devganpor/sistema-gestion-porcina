@@ -124,7 +124,9 @@ const NutritionComplete: React.FC = () => {
     cantidad_kg: '',
     observaciones: ''
   });
-  const [filtroFecha, setFiltroFecha] = useState(new Date().toISOString().split('T')[0]);
+  const today = new Date().toISOString().split('T')[0];
+  const [filtroFechaInicio, setFiltroFechaInicio] = useState('2026-07-31');
+  const [filtroFechaFin, setFiltroFechaFin] = useState(today);
   const [filtroCorral, setFiltroCorral] = useState('');
 
   // --- Planes ---
@@ -181,11 +183,33 @@ const NutritionComplete: React.FC = () => {
   const loadRegistros = async () => {
     try {
       const params = new URLSearchParams();
-      if (filtroFecha) { params.append('fecha_inicio', filtroFecha); params.append('fecha_fin', filtroFecha); }
+      if (filtroFechaInicio) params.append('fecha_inicio', filtroFechaInicio);
+      if (filtroFechaFin) params.append('fecha_fin', filtroFechaFin);
       if (filtroCorral) params.append('ubicacion_id', filtroCorral);
       const res = await api.get(`/nutrition/feeding?${params.toString()}`);
       setRegistros(res.data);
     } catch { setRegistros([]); }
+  };
+
+  const aplicarRangoSemana = (tipo: 'esta' | 'pasada' | 'dos' | 'mes') => {
+    const hoy = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    const diaSemana = hoy.getDay() === 0 ? 6 : hoy.getDay() - 1; // lunes=0
+    if (tipo === 'esta') {
+      const lunes = new Date(hoy); lunes.setDate(hoy.getDate() - diaSemana);
+      setFiltroFechaInicio(fmt(lunes)); setFiltroFechaFin(fmt(hoy));
+    } else if (tipo === 'pasada') {
+      const lunesPasado = new Date(hoy); lunesPasado.setDate(hoy.getDate() - diaSemana - 7);
+      const domPasado = new Date(lunesPasado); domPasado.setDate(lunesPasado.getDate() + 6);
+      setFiltroFechaInicio(fmt(lunesPasado)); setFiltroFechaFin(fmt(domPasado));
+    } else if (tipo === 'dos') {
+      const hace14 = new Date(hoy); hace14.setDate(hoy.getDate() - 13);
+      setFiltroFechaInicio(fmt(hace14)); setFiltroFechaFin(fmt(hoy));
+    } else {
+      const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+      setFiltroFechaInicio(fmt(primerDia)); setFiltroFechaFin(fmt(hoy));
+    }
   };
 
   const handleFeedingSubmit = async (e: React.FormEvent) => {
@@ -1081,24 +1105,46 @@ const NutritionComplete: React.FC = () => {
               )}
 
               {/* Filtros + botón */}
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#6c757d', marginBottom: '4px' }}>FECHA</label>
-                  <input type="date" value={filtroFecha} onChange={e => setFiltroFecha(e.target.value)} style={{ ...inp(), width: 160 }} />
+              <div style={{ background: '#f8f9fa', borderRadius: '10px', padding: '14px 16px', marginBottom: '16px', border: '1px solid #ebedf2' }}>
+                {/* Atajos de semana */}
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontSize: '12px', fontWeight: '600', color: '#6c757d', marginRight: '4px' }}>RANGO RÁPIDO:</span>
+                  {([
+                    { label: 'Esta semana', tipo: 'esta' as const },
+                    { label: 'Semana pasada', tipo: 'pasada' as const },
+                    { label: 'Últimas 2 semanas', tipo: 'dos' as const },
+                    { label: 'Este mes', tipo: 'mes' as const },
+                  ]).map(({ label, tipo }) => (
+                    <button key={tipo} className="btn btn-sm" onClick={() => aplicarRangoSemana(tipo)}
+                      style={{ background: '#fff', border: '1px solid #dee2e6', borderRadius: '20px', fontSize: '12px', padding: '4px 12px', color: '#495057', cursor: 'pointer' }}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#6c757d', marginBottom: '4px' }}>CORRAL</label>
-                  <select value={filtroCorral} onChange={e => setFiltroCorral(e.target.value)} style={{ ...inp(), width: 200 }}>
-                    <option value="">Todos los corrales</option>
-                    {corrales.map(c => <option key={c.id} value={c.id}>{c.nombre}{c.etiqueta ? ` — ${c.etiqueta}` : ''}</option>)}
-                  </select>
+                {/* Inputs de rango + corral */}
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#6c757d', marginBottom: '4px' }}>FECHA INICIO</label>
+                    <input type="date" value={filtroFechaInicio} onChange={e => setFiltroFechaInicio(e.target.value)} style={{ ...inp(), width: 160 }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#6c757d', marginBottom: '4px' }}>FECHA FIN</label>
+                    <input type="date" value={filtroFechaFin} onChange={e => setFiltroFechaFin(e.target.value)} style={{ ...inp(), width: 160 }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#6c757d', marginBottom: '4px' }}>CORRAL</label>
+                    <select value={filtroCorral} onChange={e => setFiltroCorral(e.target.value)} style={{ ...inp(), width: 200 }}>
+                      <option value="">Todos los corrales</option>
+                      {corrales.map(c => <option key={c.id} value={c.id}>{c.nombre}{c.etiqueta ? ` — ${c.etiqueta}` : ''}</option>)}
+                    </select>
+                  </div>
+                  <button className="btn btn-primary" onClick={loadRegistros}>
+                    <i className="fas fa-search" style={{ marginRight: '6px' }}></i>Buscar
+                  </button>
+                  <button className="btn btn-success" style={{ marginLeft: 'auto' }} onClick={() => setShowFeedingForm(true)}>
+                    <i className="fas fa-plus" style={{ marginRight: '6px' }}></i>Registrar Alimentación
+                  </button>
                 </div>
-                <button className="btn btn-primary" onClick={loadRegistros}>
-                  <i className="fas fa-search" style={{ marginRight: '6px' }}></i>Buscar
-                </button>
-                <button className="btn btn-success" style={{ marginLeft: 'auto' }} onClick={() => { setShowFeedingForm(true); }}>
-                  <i className="fas fa-plus" style={{ marginRight: '6px' }}></i>Registrar Alimentación
-                </button>
               </div>
 
               {/* Tabla registros */}
