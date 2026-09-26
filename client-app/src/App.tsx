@@ -29,6 +29,7 @@ const NotificationCenter = lazy(() => import('./components/NotificationCenter'))
 const UserProfile = lazy(() => import('./components/UserProfile'));
 const AuditLogs = lazy(() => import('./components/AuditLogs'));
 const Medications = lazy(() => import('./components/Medications'));
+const Payroll = lazy(() => import('./components/Payroll'));
 
 const PageLoader = () => (
   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
@@ -139,6 +140,7 @@ const AppContent: React.FC = () => {
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/genealogy" element={<Genealogy />} />
               <Route path="/nutrition" element={<NutritionComplete />} />
+              <Route path="/payroll" element={<Payroll />} />
               <Route path="/users" element={<UserManagement />} />
               <Route path="/notifications" element={<NotificationCenter />} />
               <Route path="/profile" element={<UserProfile />} />

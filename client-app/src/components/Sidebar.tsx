@@ -18,6 +18,7 @@ const Sidebar: React.FC = () => {
     { path: '/medications', icon: 'fas fa-pills', label: 'Medicamentos' },
     { path: '/locations', icon: 'fas fa-map-marker-alt', label: 'Ubicaciones' },
     { path: '/finance', icon: 'fas fa-dollar-sign', label: 'Finanzas' },
+    { path: '/payroll', icon: 'fas fa-users-cog', label: 'Nómina' },
     { path: '/genealogy', icon: 'fas fa-dna', label: 'Genealogía' },
     { path: '/nutrition', icon: 'fas fa-seedling', label: 'Nutrición' },
     { path: '/reports', icon: 'fas fa-chart-bar', label: 'Reportes' },

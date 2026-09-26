@@ -28,6 +28,7 @@ const usersRoutes = require('./routes/users');
 const emailRoutes = require('./routes/email');
 const analyticsRoutes = require('./routes/analytics');
 const auditRoutes = require('./routes/audit');
+const payrollRoutes = require('./routes/payroll');
 const BackupService = require('./services/BackupService');
 const { AuditLogger, auditMiddleware } = require('./services/AuditLogger');
 const { errorHandler } = require('./middleware/errorHandler');
@@ -139,6 +140,7 @@ app.use('/api/users', usersRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/audit', auditRoutes);
+app.use('/api/payroll', payrollRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
