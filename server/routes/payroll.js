@@ -5,6 +5,55 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Crear tabla si no existe (auto-migración)
+const initTable = async () => {
+  try {
+    await query(`
+      CREATE TABLE IF NOT EXISTS nomina (
+        id SERIAL PRIMARY KEY,
+        empleado VARCHAR(150) NOT NULL,
+        cargo VARCHAR(100) NOT NULL,
+        periodo_inicio DATE NOT NULL,
+        periodo_fin DATE NOT NULL,
+        salario_base NUMERIC(12,2) NOT NULL DEFAULT 0,
+        bonificaciones NUMERIC(12,2) NOT NULL DEFAULT 0,
+        deducciones NUMERIC(12,2) NOT NULL DEFAULT 0,
+        total_pago NUMERIC(12,2) NOT NULL,
+        animal_id INTEGER REFERENCES animales(id) ON DELETE SET NULL,
+        observaciones TEXT,
+        usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  } catch (e) {
+    console.error('Error creando tabla nomina:', e.message);
+  }
+};
+initTable();
+
+// GET /api/payroll/summary — resumen de nómina por período (debe ir ANTES de /:id)
+router.get('/summary', authenticateToken, async (req, res) => {
+  try {
+    const { fecha_inicio, fecha_fin } = req.query;
+    const fechaInicio = fecha_inicio || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+    const fechaFin = fecha_fin || new Date().toISOString().split('T')[0];
+
+    const [total, porCargo] = await Promise.all([
+      query(`SELECT SUM(total_pago) as total, COUNT(*) as cantidad FROM nomina WHERE periodo_inicio >= $1 AND periodo_fin <= $2`, [fechaInicio, fechaFin]),
+      query(`SELECT cargo, SUM(total_pago) as total, COUNT(*) as cantidad FROM nomina WHERE periodo_inicio >= $1 AND periodo_fin <= $2 GROUP BY cargo`, [fechaInicio, fechaFin])
+    ]);
+
+    res.json({
+      periodo: { fecha_inicio: fechaInicio, fecha_fin: fechaFin },
+      total_pagado: parseFloat(total.rows[0].total || 0),
+      cantidad_pagos: parseInt(total.rows[0].cantidad || 0),
+      por_cargo: porCargo.rows
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Error obteniendo resumen de nómina' });
+  }
+});
+
 // GET /api/payroll — listar registros de nómina
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -99,29 +148,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     res.json({ message: 'Registro de nómina eliminado' });
   } catch (error) {
     res.status(500).json({ error: 'Error eliminando nómina' });
-  }
-});
-
-// GET /api/payroll/summary — resumen de nómina por período
-router.get('/summary', authenticateToken, async (req, res) => {
-  try {
-    const { fecha_inicio, fecha_fin } = req.query;
-    const fechaInicio = fecha_inicio || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-    const fechaFin = fecha_fin || new Date().toISOString().split('T')[0];
-
-    const [total, porCargo] = await Promise.all([
-      query(`SELECT SUM(total_pago) as total, COUNT(*) as cantidad FROM nomina WHERE periodo_inicio >= $1 AND periodo_fin <= $2`, [fechaInicio, fechaFin]),
-      query(`SELECT cargo, SUM(total_pago) as total, COUNT(*) as cantidad FROM nomina WHERE periodo_inicio >= $1 AND periodo_fin <= $2 GROUP BY cargo`, [fechaInicio, fechaFin])
-    ]);
-
-    res.json({
-      periodo: { fecha_inicio: fechaInicio, fecha_fin: fechaFin },
-      total_pagado: parseFloat(total.rows[0].total || 0),
-      cantidad_pagos: parseInt(total.rows[0].cantidad || 0),
-      por_cargo: porCargo.rows
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Error obteniendo resumen de nómina' });
   }
 });
 
