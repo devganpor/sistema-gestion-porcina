@@ -239,29 +239,29 @@ router.get('/feeding', authenticateToken, async (req, res) => {
     const trunc      = agrupacion === 'semana' ? 'week'       : agrupacion === 'dia' ? 'day'        : 'month';
     const fechaExpr  = `DATE_TRUNC('${trunc}', (fecha_suministro AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota')::date::timestamp)`;
 
-    const [resumen, porDieta, porUbicacion, porCategoria, detalle, filtrosDisponibles] = await Promise.all([
-      // Resumen general del período
+    const [resumen, temporal, porDieta, porUbicacion, porCategoria, filtrosDisponibles] = await Promise.all([
+      // 1. Resumen general del período
       query(`
         SELECT
-          COUNT(*)                                          AS total_registros,
-          ROUND(SUM(r.cantidad_kg)::numeric, 2)            AS total_kg,
-          ROUND(AVG(r.cantidad_kg)::numeric, 2)            AS promedio_kg_registro,
-          ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2) AS costo_total,
-          COUNT(DISTINCT r.dieta_id)                       AS dietas_usadas,
-          COUNT(DISTINCT r.ubicacion_id)                   AS ubicaciones_atendidas
+          COUNT(*)                                                        AS total_registros,
+          ROUND(SUM(r.cantidad_kg)::numeric, 2)                          AS total_kg,
+          ROUND(AVG(r.cantidad_kg)::numeric, 2)                          AS promedio_kg_registro,
+          ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)        AS costo_total,
+          COUNT(DISTINCT r.dieta_id)                                     AS dietas_usadas,
+          COUNT(DISTINCT r.ubicacion_id)                                 AS ubicaciones_atendidas
         FROM registro_alimentacion r
         LEFT JOIN dietas d ON r.dieta_id = d.id
         WHERE ${where}
       `, params),
 
-      // Consumo agrupado por período
+      // 2. Consumo temporal agrupado
       query(`
         SELECT
-          TO_CHAR(${fechaExpr}, 'YYYY-MM-DD') AS periodo_inicio,
-          TO_CHAR(${fechaExpr}, 'DD/MM/YYYY') AS periodo,
-          ROUND(SUM(r.cantidad_kg)::numeric, 2)                                AS total_kg,
-          ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)              AS costo_total,
-          COUNT(*)                                                             AS registros
+          TO_CHAR(${fechaExpr}, 'YYYY-MM-DD')                            AS periodo_orden,
+          TO_CHAR(${fechaExpr}, 'DD/MM/YYYY')                            AS fecha,
+          ROUND(SUM(r.cantidad_kg)::numeric, 2)                          AS total_kg,
+          ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)        AS costo_total,
+          COUNT(*)                                                        AS registros
         FROM registro_alimentacion r
         LEFT JOIN dietas d ON r.dieta_id = d.id
         WHERE ${where}
@@ -269,16 +269,16 @@ router.get('/feeding', authenticateToken, async (req, res) => {
         ORDER BY ${fechaExpr}
       `, params),
 
-      // Consumo por dieta
+      // 3. Consumo por dieta
       query(`
         SELECT
-          d.nombre                                                  AS dieta,
+          d.nombre                                                        AS dieta,
           d.categoria_animal,
-          ROUND(SUM(r.cantidad_kg)::numeric, 2)                    AS total_kg,
-          ROUND(AVG(r.cantidad_kg)::numeric, 2)                    AS promedio_kg,
-          ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)  AS costo_total,
-          ROUND(AVG(d.costo_por_kg)::numeric, 4)                  AS costo_por_kg,
-          COUNT(*)                                                  AS registros
+          ROUND(SUM(r.cantidad_kg)::numeric, 2)                          AS total_kg,
+          ROUND(AVG(r.cantidad_kg)::numeric, 2)                          AS promedio_kg,
+          ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)        AS costo_total,
+          ROUND(AVG(d.costo_por_kg)::numeric, 4)                        AS costo_por_kg,
+          COUNT(*)                                                        AS registros
         FROM registro_alimentacion r
         LEFT JOIN dietas d ON r.dieta_id = d.id
         WHERE ${where}
@@ -286,15 +286,15 @@ router.get('/feeding', authenticateToken, async (req, res) => {
         ORDER BY total_kg DESC
       `, params),
 
-      // Consumo por ubicación
+      // 4. Consumo por ubicación
       query(`
         SELECT
-          u.nombre                                                  AS ubicacion,
+          u.nombre                                                        AS ubicacion,
           u.tipo,
           u.capacidad_maxima,
-          ROUND(SUM(r.cantidad_kg)::numeric, 2)                    AS total_kg,
-          ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)  AS costo_total,
-          COUNT(*)                                                  AS registros,
+          ROUND(SUM(r.cantidad_kg)::numeric, 2)                          AS total_kg,
+          ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)        AS costo_total,
+          COUNT(*)                                                        AS registros,
           ROUND(SUM(r.cantidad_kg) / NULLIF(u.capacidad_maxima, 0)::numeric, 2) AS kg_por_capacidad
         FROM registro_alimentacion r
         LEFT JOIN dietas d ON r.dieta_id = d.id
@@ -304,13 +304,13 @@ router.get('/feeding', authenticateToken, async (req, res) => {
         ORDER BY total_kg DESC
       `, params),
 
-      // Consumo por categoría animal
+      // 5. Consumo por categoría animal
       query(`
         SELECT
-          d.categoria_animal,
-          ROUND(SUM(r.cantidad_kg)::numeric, 2)                    AS total_kg,
-          ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)  AS costo_total,
-          COUNT(*)                                                  AS registros
+          COALESCE(d.categoria_animal, 'Sin categoría')                  AS categoria_animal,
+          ROUND(SUM(r.cantidad_kg)::numeric, 2)                          AS total_kg,
+          ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)        AS costo_total,
+          COUNT(*)                                                        AS registros
         FROM registro_alimentacion r
         LEFT JOIN dietas d ON r.dieta_id = d.id
         WHERE ${where}
@@ -318,7 +318,7 @@ router.get('/feeding', authenticateToken, async (req, res) => {
         ORDER BY total_kg DESC
       `, params),
 
-      // Opciones para filtros
+      // 6. Filtros disponibles (dietas)
       query(`
         SELECT DISTINCT d.id, d.nombre, d.categoria_animal
         FROM dietas d JOIN registro_alimentacion r ON r.dieta_id = d.id
@@ -326,32 +326,17 @@ router.get('/feeding', authenticateToken, async (req, res) => {
       `),
     ]);
 
-    // Ubicaciones disponibles
+    // Ubicaciones disponibles para filtro
     const ubicacionesDisp = await query(`
       SELECT DISTINCT u.id, u.nombre, u.tipo
       FROM ubicaciones u JOIN registro_alimentacion r ON r.ubicacion_id = u.id
       ORDER BY u.nombre
     `);
 
-    // Tabla temporal con fecha legible
-    const temporalResult = await query(`
-      SELECT
-        TO_CHAR(${fechaExpr}, 'YYYY-MM-DD') AS periodo_orden,
-        TO_CHAR(${fechaExpr}, 'DD/MM/YYYY') AS fecha,
-        ROUND(SUM(r.cantidad_kg)::numeric, 2)                               AS total_kg,
-        ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)             AS costo_total,
-        COUNT(*)                                                            AS registros
-      FROM registro_alimentacion r
-      LEFT JOIN dietas d ON r.dieta_id = d.id
-      WHERE ${where}
-      GROUP BY ${fechaExpr}
-      ORDER BY ${fechaExpr}
-    `, params);
-
     res.json({
       periodo: { fecha_inicio: fechaInicio, fecha_fin: fechaFin },
       resumen: resumen.rows[0],
-      consumo_temporal_tabla: temporalResult.rows,
+      consumo_temporal_tabla: temporal.rows,
       por_dieta: porDieta.rows,
       por_ubicacion: porUbicacion.rows,
       por_categoria: porCategoria.rows,
