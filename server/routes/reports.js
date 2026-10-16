@@ -90,9 +90,9 @@ router.get('/growth', authenticateToken, async (req, res) => {
     const crecimiento = await query(`
       SELECT a.categoria,
              COUNT(DISTINCT a.id) as total_animales,
-             AVG(p.peso) as peso_promedio,
-             MIN(p.peso) as peso_minimo,
-             MAX(p.peso) as peso_maximo
+             ROUND(AVG(p.peso)::numeric, 2) as peso_promedio,
+             ROUND(MIN(p.peso)::numeric, 2) as peso_minimo,
+             ROUND(MAX(p.peso)::numeric, 2) as peso_maximo
       FROM animales a
       JOIN pesajes p ON a.id = p.animal_id
       WHERE a.estado = 'activo'${catFilter}
@@ -102,6 +102,7 @@ router.get('/growth', authenticateToken, async (req, res) => {
 
     res.json({ estadisticas_crecimiento: crecimiento.rows });
   } catch (error) {
+    console.error('Error reporte crecimiento:', error.message);
     res.status(500).json({ error: 'Error generando reporte de crecimiento' });
   }
 });
@@ -111,16 +112,16 @@ router.get('/inventory', authenticateToken, async (req, res) => {
     const [inventario, ubicaciones] = await Promise.all([
       query(`
         SELECT categoria, sexo, COUNT(*) as cantidad,
-               AVG(EXTRACT(EPOCH FROM (CURRENT_DATE - fecha_nacimiento))/86400) as edad_promedio_dias
+               ROUND(AVG(CURRENT_DATE - fecha_nacimiento)) as edad_promedio_dias
         FROM animales WHERE estado = 'activo'
         GROUP BY categoria, sexo ORDER BY categoria, sexo
       `),
       query(`
         SELECT u.nombre as ubicacion, u.tipo, u.capacidad_maxima,
-               COUNT(a.id) as ocupacion_actual, a.categoria
+               COUNT(a.id) as ocupacion_actual
         FROM ubicaciones u
         LEFT JOIN animales a ON u.id = a.ubicacion_actual_id AND a.estado = 'activo'
-        GROUP BY u.id, u.nombre, u.tipo, u.capacidad_maxima, a.categoria
+        GROUP BY u.id, u.nombre, u.tipo, u.capacidad_maxima
         ORDER BY u.tipo, u.nombre
       `)
     ]);
@@ -130,6 +131,7 @@ router.get('/inventory', authenticateToken, async (req, res) => {
       ocupacion_ubicaciones: ubicaciones.rows
     });
   } catch (error) {
+    console.error('Error reporte inventario:', error.message);
     res.status(500).json({ error: 'Error generando reporte de inventario' });
   }
 });
@@ -220,29 +222,28 @@ router.get('/financial', authenticateToken, async (req, res) => {
 
 router.get('/feeding', authenticateToken, async (req, res) => {
   try {
-    const { fecha_inicio, fecha_fin, categoria } = req.query;
+    const { fecha_inicio, fecha_fin } = req.query;
     const fechaInicio = fecha_inicio || new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
     const fechaFin = fecha_fin || new Date().toISOString().split('T')[0];
-    const params = [fechaInicio, fechaFin];
-    let catFilter = '';
-    if (categoria) { params.push(categoria); catFilter = ` AND categoria_animal = $${params.length}`; }
 
-    const [consumo, inventarioAlimentos] = await Promise.all([
+    const [consumo, ingredientes] = await Promise.all([
       query(`
-        SELECT TO_CHAR(DATE_TRUNC('month', fecha_suministro), 'YYYY-MM') as mes,
-               categoria_animal,
-               SUM(cantidad_kg) as total_kg,
-               SUM(costo_total) as costo_total,
-               AVG(cantidad_kg) as promedio_diario_kg
-        FROM registros_alimentacion
-        WHERE fecha_suministro BETWEEN $1 AND $2${catFilter}
-        GROUP BY DATE_TRUNC('month', fecha_suministro), categoria_animal
-        ORDER BY mes, categoria_animal
-      `, params),
+        SELECT TO_CHAR(DATE_TRUNC('month', r.fecha_suministro), 'YYYY-MM') as mes,
+               d.nombre as dieta,
+               SUM(r.cantidad_kg) as total_kg,
+               COUNT(*) as registros,
+               ROUND(AVG(r.cantidad_kg)::numeric, 2) as promedio_kg
+        FROM registro_alimentacion r
+        LEFT JOIN dietas d ON r.dieta_id = d.id
+        WHERE r.fecha_suministro BETWEEN $1 AND $2
+        GROUP BY DATE_TRUNC('month', r.fecha_suministro), d.nombre
+        ORDER BY mes
+      `, [fechaInicio, fechaFin]),
       query(`
-        SELECT nombre, tipo, stock_actual, unidad, costo_por_unidad,
-               (stock_actual * costo_por_unidad) as valor_inventario
-        FROM alimentos
+        SELECT nombre, tipo, stock_actual, stock_minimo, unidad_medida,
+               costo_por_kg,
+               ROUND((stock_actual * costo_por_kg)::numeric, 2) as valor_inventario
+        FROM ingredientes
         ORDER BY tipo, nombre
       `)
     ]);
@@ -250,9 +251,10 @@ router.get('/feeding', authenticateToken, async (req, res) => {
     res.json({
       periodo: { fecha_inicio: fechaInicio, fecha_fin: fechaFin },
       consumo_mensual: consumo.rows,
-      inventario_alimentos: inventarioAlimentos.rows
+      inventario_ingredientes: ingredientes.rows
     });
   } catch (error) {
+    console.error('Error reporte alimentacion:', error.message);
     res.status(500).json({ error: 'Error generando reporte de alimentación' });
   }
 });

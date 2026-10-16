@@ -251,8 +251,8 @@ const Reports: React.FC = () => {
             </div>
             <h6 style={{ marginBottom: '10px', color: '#1a2035' }}>Consumo Mensual por Categoría</h6>
             <ReportTable data={reportData.consumo_mensual} />
-            <h6 style={{ margin: '20px 0 10px', color: '#1a2035' }}>Inventario de Alimentos</h6>
-            <ReportTable data={reportData.inventario_alimentos} />
+            <h6 style={{ margin: '20px 0 10px', color: '#1a2035' }}>Inventario de Ingredientes</h6>
+            <ReportTable data={reportData.inventario_ingredientes} />
           </>
         );
       }
