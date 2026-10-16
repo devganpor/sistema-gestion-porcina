@@ -222,40 +222,146 @@ router.get('/financial', authenticateToken, async (req, res) => {
 
 router.get('/feeding', authenticateToken, async (req, res) => {
   try {
-    const { fecha_inicio, fecha_fin } = req.query;
+    const { fecha_inicio, fecha_fin, dieta_id, ubicacion_id, categoria_animal, agrupacion } = req.query;
     const fechaInicio = fecha_inicio || new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0];
     const fechaFin = fecha_fin || new Date().toISOString().split('T')[0];
 
-    const [consumo, ingredientes] = await Promise.all([
+    // Filtros dinámicos
+    const filtros = ['r.fecha_suministro BETWEEN $1 AND $2'];
+    const params = [fechaInicio, fechaFin];
+    if (dieta_id)        { params.push(dieta_id);        filtros.push(`r.dieta_id = $${params.length}`); }
+    if (ubicacion_id)    { params.push(ubicacion_id);    filtros.push(`r.ubicacion_id = $${params.length}`); }
+    if (categoria_animal){ params.push(categoria_animal); filtros.push(`d.categoria_animal = $${params.length}`); }
+    const where = filtros.join(' AND ');
+
+    // Agrupación temporal configurable
+    const periodoFmt = agrupacion === 'semana' ? 'IYYY-IW' : agrupacion === 'dia' ? 'YYYY-MM-DD' : 'YYYY-MM';
+    const trunc      = agrupacion === 'semana' ? 'week'    : agrupacion === 'dia' ? 'day'        : 'month';
+
+    const [resumen, porDieta, porUbicacion, porCategoria, detalle, filtrosDisponibles] = await Promise.all([
+      // Resumen general del período
       query(`
-        SELECT TO_CHAR(DATE_TRUNC('month', r.fecha_suministro), 'YYYY-MM') as mes,
-               d.nombre as dieta,
-               SUM(r.cantidad_kg) as total_kg,
-               COUNT(*) as registros,
-               ROUND(AVG(r.cantidad_kg)::numeric, 2) as promedio_kg
+        SELECT
+          COUNT(*)                                          AS total_registros,
+          ROUND(SUM(r.cantidad_kg)::numeric, 2)            AS total_kg,
+          ROUND(AVG(r.cantidad_kg)::numeric, 2)            AS promedio_kg_registro,
+          ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2) AS costo_total,
+          COUNT(DISTINCT r.dieta_id)                       AS dietas_usadas,
+          COUNT(DISTINCT r.ubicacion_id)                   AS ubicaciones_atendidas
         FROM registro_alimentacion r
         LEFT JOIN dietas d ON r.dieta_id = d.id
-        WHERE r.fecha_suministro BETWEEN $1 AND $2
-        GROUP BY DATE_TRUNC('month', r.fecha_suministro), d.nombre
-        ORDER BY mes
-      `, [fechaInicio, fechaFin]),
+        WHERE ${where}
+      `, params),
+
+      // Consumo agrupado por período
       query(`
-        SELECT nombre, tipo, stock_actual, stock_minimo, unidad_medida,
-               costo_por_kg,
-               ROUND((stock_actual * costo_por_kg)::numeric, 2) as valor_inventario
-        FROM ingredientes
-        ORDER BY tipo, nombre
-      `)
+        SELECT
+          TO_CHAR(DATE_TRUNC('${trunc}', r.fecha_suministro), '${periodoFmt}') AS periodo,
+          ROUND(SUM(r.cantidad_kg)::numeric, 2)                                AS total_kg,
+          ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)              AS costo_total,
+          COUNT(*)                                                             AS registros
+        FROM registro_alimentacion r
+        LEFT JOIN dietas d ON r.dieta_id = d.id
+        WHERE ${where}
+        GROUP BY DATE_TRUNC('${trunc}', r.fecha_suministro)
+        ORDER BY DATE_TRUNC('${trunc}', r.fecha_suministro)
+      `, params),
+
+      // Consumo por dieta
+      query(`
+        SELECT
+          d.nombre                                                  AS dieta,
+          d.categoria_animal,
+          ROUND(SUM(r.cantidad_kg)::numeric, 2)                    AS total_kg,
+          ROUND(AVG(r.cantidad_kg)::numeric, 2)                    AS promedio_kg,
+          ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)  AS costo_total,
+          ROUND(AVG(d.costo_por_kg)::numeric, 4)                  AS costo_por_kg,
+          COUNT(*)                                                  AS registros
+        FROM registro_alimentacion r
+        LEFT JOIN dietas d ON r.dieta_id = d.id
+        WHERE ${where}
+        GROUP BY d.id, d.nombre, d.categoria_animal
+        ORDER BY total_kg DESC
+      `, params),
+
+      // Consumo por ubicación
+      query(`
+        SELECT
+          u.nombre                                                  AS ubicacion,
+          u.tipo,
+          u.capacidad_maxima,
+          ROUND(SUM(r.cantidad_kg)::numeric, 2)                    AS total_kg,
+          ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)  AS costo_total,
+          COUNT(*)                                                  AS registros,
+          ROUND(SUM(r.cantidad_kg) / NULLIF(u.capacidad_maxima, 0)::numeric, 2) AS kg_por_capacidad
+        FROM registro_alimentacion r
+        LEFT JOIN dietas d ON r.dieta_id = d.id
+        LEFT JOIN ubicaciones u ON r.ubicacion_id = u.id
+        WHERE ${where}
+        GROUP BY u.id, u.nombre, u.tipo, u.capacidad_maxima
+        ORDER BY total_kg DESC
+      `, params),
+
+      // Consumo por categoría animal
+      query(`
+        SELECT
+          d.categoria_animal,
+          ROUND(SUM(r.cantidad_kg)::numeric, 2)                    AS total_kg,
+          ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)  AS costo_total,
+          COUNT(*)                                                  AS registros
+        FROM registro_alimentacion r
+        LEFT JOIN dietas d ON r.dieta_id = d.id
+        WHERE ${where}
+        GROUP BY d.categoria_animal
+        ORDER BY total_kg DESC
+      `, params),
+
+      // Opciones para filtros
+      query(`
+        SELECT DISTINCT d.id, d.nombre, d.categoria_animal
+        FROM dietas d JOIN registro_alimentacion r ON r.dieta_id = d.id
+        ORDER BY d.nombre
+      `),
     ]);
+
+    // Ubicaciones disponibles (sin filtro de dieta)
+    const ubicacionesDisp = await query(`
+      SELECT DISTINCT u.id, u.nombre, u.tipo
+      FROM ubicaciones u JOIN registro_alimentacion r ON r.ubicacion_id = u.id
+      ORDER BY u.nombre
+    `);
 
     res.json({
       periodo: { fecha_inicio: fechaInicio, fecha_fin: fechaFin },
-      consumo_mensual: consumo.rows,
-      inventario_ingredientes: ingredientes.rows
+      resumen: resumen.rows[0],
+      consumo_por_periodo: porDieta.rows.length ? porDieta.rows : [],
+      consumo_temporal: porDieta.rows.length ? [] : [],
+      por_periodo: porDieta.rows,
+      temporal: detalle.rows,
+      // Tablas principales
+      consumo_temporal_tabla: (await query(`
+        SELECT
+          TO_CHAR(DATE_TRUNC('${trunc}', r.fecha_suministro), '${periodoFmt}') AS periodo,
+          ROUND(SUM(r.cantidad_kg)::numeric, 2)                                AS total_kg,
+          ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)              AS costo_total,
+          COUNT(*)                                                             AS registros
+        FROM registro_alimentacion r
+        LEFT JOIN dietas d ON r.dieta_id = d.id
+        WHERE ${where}
+        GROUP BY DATE_TRUNC('${trunc}', r.fecha_suministro)
+        ORDER BY DATE_TRUNC('${trunc}', r.fecha_suministro)
+      `, params)).rows,
+      por_dieta: porDieta.rows,
+      por_ubicacion: porUbicacion.rows,
+      por_categoria: porCategoria.rows,
+      filtros_disponibles: {
+        dietas: filtrosDisponibles.rows,
+        ubicaciones: ubicacionesDisp.rows
+      }
     });
   } catch (error) {
     console.error('Error reporte alimentacion:', error.message);
-    res.status(500).json({ error: 'Error generando reporte de alimentación' });
+    res.status(500).json({ error: 'Error generando reporte de alimentación: ' + error.message });
   }
 });
 

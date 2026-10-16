@@ -114,6 +114,7 @@ const Reports: React.FC = () => {
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
   const [filters, setFilters] = useState({ categoria: '', estado: '' });
+  const [feedFilters, setFeedFilters] = useState({ dieta_id: '', ubicacion_id: '', categoria_animal: '', agrupacion: 'month' });
   const [reportData, setReportData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,6 +133,12 @@ const Reports: React.FC = () => {
       if (dateRange.endDate) params.fecha_fin = dateRange.endDate;
       if (filters.categoria) params.categoria = filters.categoria;
       if (filters.estado) params.estado = filters.estado;
+      if (selectedReport === 'alimentacion') {
+        if (feedFilters.dieta_id)        params.dieta_id        = feedFilters.dieta_id;
+        if (feedFilters.ubicacion_id)    params.ubicacion_id    = feedFilters.ubicacion_id;
+        if (feedFilters.categoria_animal) params.categoria_animal = feedFilters.categoria_animal;
+        if (feedFilters.agrupacion)      params.agrupacion      = feedFilters.agrupacion;
+      }
       const res = await api.get(currentReport.endpoint, { params });
       setReportData(res.data);
     } catch (e: any) {
@@ -241,18 +248,35 @@ const Reports: React.FC = () => {
         );
       }
       case 'alimentacion': {
-        const totalKg = (reportData.consumo_mensual || []).reduce((s: number, r: any) => s + parseFloat(r.total_kg || 0), 0);
-        const totalCosto = (reportData.consumo_mensual || []).reduce((s: number, r: any) => s + parseFloat(r.costo_total || 0), 0);
+        const r = reportData.resumen || {};
+        const agrupLabel = feedFilters.agrupacion === 'dia' ? 'Diario' : feedFilters.agrupacion === 'semana' ? 'Semanal' : 'Mensual';
         return (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px', marginBottom: '20px' }}>
-              <SummaryCard label="TOTAL KG CONSUMIDOS" value={fmt(totalKg, 0)} color="#17a2b8" />
-              <SummaryCard label="COSTO TOTAL" value={`$${fmt(totalCosto, 0)}`} color="#ffad46" />
+            {/* KPIs */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+              <SummaryCard label="TOTAL KG CONSUMIDOS"     value={fmt(r.total_kg, 0)}              color="#17a2b8" />
+              <SummaryCard label="COSTO TOTAL"             value={`$${fmt(r.costo_total, 2)}`}     color="#ffad46" />
+              <SummaryCard label="PROMEDIO KG / REGISTRO"  value={fmt(r.promedio_kg_registro, 2)}  color="#1572e8" />
+              <SummaryCard label="DIETAS UTILIZADAS"       value={r.dietas_usadas ?? '-'}           color="#31ce36" />
+              <SummaryCard label="UBICACIONES ATENDIDAS"   value={r.ubicaciones_atendidas ?? '-'}   color="#6c757d" />
+              <SummaryCard label="TOTAL REGISTROS"         value={r.total_registros ?? '-'}         color="#f25961" />
             </div>
-            <h6 style={{ marginBottom: '10px', color: '#1a2035' }}>Consumo Mensual por Categoría</h6>
-            <ReportTable data={reportData.consumo_mensual} />
-            <h6 style={{ margin: '20px 0 10px', color: '#1a2035' }}>Inventario de Ingredientes</h6>
-            <ReportTable data={reportData.inventario_ingredientes} />
+
+            {/* Consumo temporal */}
+            <h6 style={{ margin: '0 0 10px', color: '#1a2035' }}>Consumo {agrupLabel}</h6>
+            <ReportTable data={reportData.consumo_temporal_tabla} />
+
+            {/* Por dieta */}
+            <h6 style={{ margin: '20px 0 10px', color: '#1a2035' }}>Consumo por Dieta</h6>
+            <ReportTable data={reportData.por_dieta} />
+
+            {/* Por ubicación */}
+            <h6 style={{ margin: '20px 0 10px', color: '#1a2035' }}>Consumo por Ubicación</h6>
+            <ReportTable data={reportData.por_ubicacion} />
+
+            {/* Por categoría animal */}
+            <h6 style={{ margin: '20px 0 10px', color: '#1a2035' }}>Consumo por Categoría Animal</h6>
+            <ReportTable data={reportData.por_categoria} />
           </>
         );
       }
@@ -331,6 +355,7 @@ const Reports: React.FC = () => {
                       onChange={e => setDateRange({ ...dateRange, endDate: e.target.value })}
                       style={{ width: '100%', padding: '10px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px' }} />
                   </div>
+                  {selectedReport !== 'alimentacion' && (<>
                   <div>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: 600, color: '#1a2035' }}>Categoría</label>
                     <select value={filters.categoria} onChange={e => setFilters({ ...filters, categoria: e.target.value })}
@@ -353,6 +378,51 @@ const Reports: React.FC = () => {
                       <option value="muerto">Muerto</option>
                     </select>
                   </div>
+                  </>)}
+
+                  {selectedReport === 'alimentacion' && (<>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: 600, color: '#1a2035' }}>Agrupación</label>
+                    <select value={feedFilters.agrupacion} onChange={e => setFeedFilters({ ...feedFilters, agrupacion: e.target.value })}
+                      style={{ width: '100%', padding: '10px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px' }}>
+                      <option value="month">Mensual</option>
+                      <option value="week">Semanal</option>
+                      <option value="dia">Diario</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: 600, color: '#1a2035' }}>Categoría Animal</label>
+                    <select value={feedFilters.categoria_animal} onChange={e => setFeedFilters({ ...feedFilters, categoria_animal: e.target.value })}
+                      style={{ width: '100%', padding: '10px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px' }}>
+                      <option value="">Todas</option>
+                      <option value="lechon">Lechón</option>
+                      <option value="recria">Recría</option>
+                      <option value="desarrollo">Desarrollo</option>
+                      <option value="engorde">Engorde</option>
+                      <option value="reproductor">Reproductor</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: 600, color: '#1a2035' }}>Dieta</label>
+                    <select value={feedFilters.dieta_id} onChange={e => setFeedFilters({ ...feedFilters, dieta_id: e.target.value })}
+                      style={{ width: '100%', padding: '10px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px' }}>
+                      <option value="">Todas las dietas</option>
+                      {(reportData?.filtros_disponibles?.dietas || []).map((d: any) => (
+                        <option key={d.id} value={d.id}>{d.nombre} ({d.categoria_animal})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: 600, color: '#1a2035' }}>Ubicación</label>
+                    <select value={feedFilters.ubicacion_id} onChange={e => setFeedFilters({ ...feedFilters, ubicacion_id: e.target.value })}
+                      style={{ width: '100%', padding: '10px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px' }}>
+                      <option value="">Todas las ubicaciones</option>
+                      {(reportData?.filtros_disponibles?.ubicaciones || []).map((u: any) => (
+                        <option key={u.id} value={u.id}>{u.nombre} ({u.tipo})</option>
+                      ))}
+                    </select>
+                  </div>
+                  </>)}
                 </div>
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                   <button className="btn btn-primary" onClick={handleGenerateReport} disabled={loading}>
