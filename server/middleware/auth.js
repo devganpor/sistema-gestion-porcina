@@ -12,13 +12,8 @@ const authenticateToken = async (req, res, next) => {
   try {
     const secret = process.env.JWT_SECRET || 'secret_key';
     const decoded = jwt.verify(token, secret);
-    const user = await query('SELECT id, nombre, email, rol FROM usuarios WHERE id = $1 AND activo = true', [decoded.userId]);
-    
-    if (user.rows.length === 0) {
-      return res.status(403).json({ error: 'Usuario no válido' });
-    }
-
-    req.user = user.rows[0];
+    // Datos básicos vienen en el token, evitamos query a DB en cada request
+    req.user = { id: decoded.userId, nombre: decoded.nombre, email: decoded.email, rol: decoded.rol };
     next();
   } catch (error) {
     console.error('Error de autenticación:', error.message);
