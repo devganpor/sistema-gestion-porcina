@@ -235,9 +235,8 @@ router.get('/feeding', authenticateToken, async (req, res) => {
     const where = filtros.join(' AND ');
 
     // Agrupación temporal configurable — normalizar a fecha local antes de truncar
-    const periodoFmt = agrupacion === 'semana' ? 'YYYY-MM-DD' : agrupacion === 'dia' ? 'YYYY-MM-DD' : 'YYYY-MM-DD';
-    const trunc      = agrupacion === 'semana' ? 'week'       : agrupacion === 'dia' ? 'day'        : 'month';
-    const fechaExpr  = `DATE_TRUNC('${trunc}', (fecha_suministro AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota')::date::timestamp)`;
+    const trunc     = agrupacion === 'semana' ? 'week' : agrupacion === 'dia' ? 'day' : 'month';
+    const fechaExpr = `DATE_TRUNC('${trunc}', (fecha_suministro AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota')::date::timestamp)`;
 
     const [resumen, temporal, porDieta, porUbicacion, porCategoria, filtrosDisponibles] = await Promise.all([
       // 1. Resumen general del período
@@ -348,6 +347,27 @@ router.get('/feeding', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error reporte alimentacion:', error.message);
     res.status(500).json({ error: 'Error generando reporte de alimentación: ' + error.message });
+  }
+});
+
+// Endpoint para cargar opciones de filtros sin necesidad de generar el reporte
+router.get('/feeding-options', authenticateToken, async (req, res) => {
+  try {
+    const [dietas, ubicaciones] = await Promise.all([
+      query(`
+        SELECT DISTINCT d.id, d.nombre, d.categoria_animal
+        FROM dietas d JOIN registro_alimentacion r ON r.dieta_id = d.id
+        ORDER BY d.nombre
+      `),
+      query(`
+        SELECT DISTINCT u.id, u.nombre, u.tipo
+        FROM ubicaciones u JOIN registro_alimentacion r ON r.ubicacion_id = u.id
+        ORDER BY u.nombre
+      `)
+    ]);
+    res.json({ dietas: dietas.rows, ubicaciones: ubicaciones.rows });
+  } catch (error) {
+    res.status(500).json({ error: 'Error cargando opciones' });
   }
 });
 

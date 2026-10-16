@@ -119,12 +119,21 @@ const Reports: React.FC = () => {
   const [dateRange, setDateRange] = useState({ startDate: '', endDate: '' });
   const [filters, setFilters] = useState({ categoria: '', estado: '' });
   const [feedFilters, setFeedFilters] = useState({ dieta_id: '', ubicacion_id: '', categoria_animal: '', agrupacion: 'month' });
+  const [feedOpciones, setFeedOpciones] = useState<{ dietas: any[]; ubicaciones: any[] }>({ dietas: [], ubicaciones: [] });
   const [reportData, setReportData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   const currentReport = reportTypes.find(r => r.id === selectedReport);
+
+  // Cargar opciones de filtros de alimentacion al seleccionar ese reporte
+  React.useEffect(() => {
+    if (selectedReport !== 'alimentacion') return;
+    api.get('/reports/feeding-options').then(res => {
+      setFeedOpciones(res.data);
+    }).catch(() => {});
+  }, [selectedReport]);
 
   const handleGenerateReport = async () => {
     if (!selectedReport || !currentReport) return;
@@ -138,10 +147,10 @@ const Reports: React.FC = () => {
       if (filters.categoria) params.categoria = filters.categoria;
       if (filters.estado) params.estado = filters.estado;
       if (selectedReport === 'alimentacion') {
-        if (feedFilters.dieta_id)        params.dieta_id        = feedFilters.dieta_id;
-        if (feedFilters.ubicacion_id)    params.ubicacion_id    = feedFilters.ubicacion_id;
+        if (feedFilters.dieta_id)         params.dieta_id         = feedFilters.dieta_id;
+        if (feedFilters.ubicacion_id)     params.ubicacion_id     = feedFilters.ubicacion_id;
         if (feedFilters.categoria_animal) params.categoria_animal = feedFilters.categoria_animal;
-        if (feedFilters.agrupacion)      params.agrupacion      = feedFilters.agrupacion;
+        params.agrupacion = feedFilters.agrupacion || 'month';
       }
       const res = await api.get(currentReport.endpoint, { params });
       setReportData(res.data);
@@ -390,7 +399,7 @@ const Reports: React.FC = () => {
                     <select value={feedFilters.agrupacion} onChange={e => setFeedFilters({ ...feedFilters, agrupacion: e.target.value })}
                       style={{ width: '100%', padding: '10px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px' }}>
                       <option value="month">Mensual</option>
-                      <option value="week">Semanal</option>
+                      <option value="semana">Semanal</option>
                       <option value="dia">Diario</option>
                     </select>
                   </div>
@@ -411,7 +420,7 @@ const Reports: React.FC = () => {
                     <select value={feedFilters.dieta_id} onChange={e => setFeedFilters({ ...feedFilters, dieta_id: e.target.value })}
                       style={{ width: '100%', padding: '10px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px' }}>
                       <option value="">Todas las dietas</option>
-                      {(reportData?.filtros_disponibles?.dietas || []).map((d: any) => (
+                      {feedOpciones.dietas.map((d: any) => (
                         <option key={d.id} value={d.id}>{d.nombre} ({d.categoria_animal})</option>
                       ))}
                     </select>
@@ -421,7 +430,7 @@ const Reports: React.FC = () => {
                     <select value={feedFilters.ubicacion_id} onChange={e => setFeedFilters({ ...feedFilters, ubicacion_id: e.target.value })}
                       style={{ width: '100%', padding: '10px', border: '1px solid #ebedf2', borderRadius: '8px', fontSize: '14px' }}>
                       <option value="">Todas las ubicaciones</option>
-                      {(reportData?.filtros_disponibles?.ubicaciones || []).map((u: any) => (
+                      {feedOpciones.ubicaciones.map((u: any) => (
                         <option key={u.id} value={u.id}>{u.nombre} ({u.tipo})</option>
                       ))}
                     </select>
