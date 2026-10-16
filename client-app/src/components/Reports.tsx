@@ -74,9 +74,9 @@ const fmt = (val: any, decimals = 2) => {
   return isNaN(n) ? val ?? '-' : n.toFixed(decimals);
 };
 
-const ReportTable: React.FC<{ data: any[] }> = ({ data }) => {
+const ReportTable: React.FC<{ data: any[]; hideCols?: string[] }> = ({ data, hideCols = [] }) => {
   if (!data || data.length === 0) return <p style={{ color: '#6c757d', textAlign: 'center' }}>Sin datos para el período seleccionado.</p>;
-  const cols = Object.keys(data[0]);
+  const cols = Object.keys(data[0]).filter(c => !hideCols.includes(c));
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
@@ -264,7 +264,7 @@ const Reports: React.FC = () => {
 
             {/* Consumo temporal */}
             <h6 style={{ margin: '0 0 10px', color: '#1a2035' }}>Consumo {agrupLabel}</h6>
-            <ReportTable data={reportData.consumo_temporal_tabla} />
+            <ReportTable data={reportData.consumo_temporal_tabla} hideCols={['periodo_orden']} />
 
             {/* Por dieta */}
             <h6 style={{ margin: '20px 0 10px', color: '#1a2035' }}>Consumo por Dieta</h6>

@@ -234,9 +234,10 @@ router.get('/feeding', authenticateToken, async (req, res) => {
     if (categoria_animal){ params.push(categoria_animal); filtros.push(`d.categoria_animal = $${params.length}`); }
     const where = filtros.join(' AND ');
 
-    // Agrupación temporal configurable
-    const periodoFmt = agrupacion === 'semana' ? 'IYYY-IW' : agrupacion === 'dia' ? 'YYYY-MM-DD' : 'YYYY-MM';
-    const trunc      = agrupacion === 'semana' ? 'week'    : agrupacion === 'dia' ? 'day'        : 'month';
+    // Agrupación temporal configurable — normalizar a fecha local antes de truncar
+    const periodoFmt = agrupacion === 'semana' ? 'YYYY-MM-DD' : agrupacion === 'dia' ? 'YYYY-MM-DD' : 'YYYY-MM-DD';
+    const trunc      = agrupacion === 'semana' ? 'week'       : agrupacion === 'dia' ? 'day'        : 'month';
+    const fechaExpr  = `DATE_TRUNC('${trunc}', (fecha_suministro AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota')::date::timestamp)`;
 
     const [resumen, porDieta, porUbicacion, porCategoria, detalle, filtrosDisponibles] = await Promise.all([
       // Resumen general del período
@@ -256,15 +257,16 @@ router.get('/feeding', authenticateToken, async (req, res) => {
       // Consumo agrupado por período
       query(`
         SELECT
-          TO_CHAR(DATE_TRUNC('${trunc}', r.fecha_suministro), '${periodoFmt}') AS periodo,
+          TO_CHAR(${fechaExpr}, 'YYYY-MM-DD') AS periodo_inicio,
+          TO_CHAR(${fechaExpr}, 'DD/MM/YYYY') AS periodo,
           ROUND(SUM(r.cantidad_kg)::numeric, 2)                                AS total_kg,
           ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)              AS costo_total,
           COUNT(*)                                                             AS registros
         FROM registro_alimentacion r
         LEFT JOIN dietas d ON r.dieta_id = d.id
         WHERE ${where}
-        GROUP BY DATE_TRUNC('${trunc}', r.fecha_suministro)
-        ORDER BY DATE_TRUNC('${trunc}', r.fecha_suministro)
+        GROUP BY ${fechaExpr}
+        ORDER BY ${fechaExpr}
       `, params),
 
       // Consumo por dieta
@@ -324,33 +326,44 @@ router.get('/feeding', authenticateToken, async (req, res) => {
       `),
     ]);
 
-    // Ubicaciones disponibles (sin filtro de dieta)
+    // Ubicaciones disponibles
     const ubicacionesDisp = await query(`
       SELECT DISTINCT u.id, u.nombre, u.tipo
       FROM ubicaciones u JOIN registro_alimentacion r ON r.ubicacion_id = u.id
       ORDER BY u.nombre
     `);
 
+    // Etiqueta de periodo legible
+    const labelPeriodo = (row: any) => {
+      if (agrupacion === 'month') {
+        // periodo_inicio = 'YYYY-MM-DD' primer dia del mes
+        const [y, m] = (row.periodo_inicio || '').split('-');
+        const meses = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+        return `${meses[parseInt(m)] || m} ${y}`;
+      }
+      if (agrupacion === 'semana') return `Sem. ${row.periodo}`;
+      return row.periodo; // dia: DD/MM/YYYY
+    };
+
+    const temporalConLabel = resumen.rows; // placeholder, se usa consumo_temporal_tabla
+    const consumoTemporal = porDieta.rows; // placeholder
+
     res.json({
       periodo: { fecha_inicio: fechaInicio, fecha_fin: fechaFin },
       resumen: resumen.rows[0],
-      consumo_por_periodo: porDieta.rows.length ? porDieta.rows : [],
-      consumo_temporal: porDieta.rows.length ? [] : [],
-      por_periodo: porDieta.rows,
-      temporal: detalle.rows,
-      // Tablas principales
-      consumo_temporal_tabla: (await query(`
+      consumo_temporal_tabla: porCategoria.rows.length >= 0 ? (await query(`
         SELECT
-          TO_CHAR(DATE_TRUNC('${trunc}', r.fecha_suministro), '${periodoFmt}') AS periodo,
+          TO_CHAR(${fechaExpr}, 'YYYY-MM-DD')  AS periodo_orden,
+          TO_CHAR(${fechaExpr}, 'DD/MM/YYYY')  AS fecha,
           ROUND(SUM(r.cantidad_kg)::numeric, 2)                                AS total_kg,
           ROUND(SUM(r.cantidad_kg * d.costo_por_kg)::numeric, 2)              AS costo_total,
           COUNT(*)                                                             AS registros
         FROM registro_alimentacion r
         LEFT JOIN dietas d ON r.dieta_id = d.id
         WHERE ${where}
-        GROUP BY DATE_TRUNC('${trunc}', r.fecha_suministro)
-        ORDER BY DATE_TRUNC('${trunc}', r.fecha_suministro)
-      `, params)).rows,
+        GROUP BY ${fechaExpr}
+        ORDER BY ${fechaExpr}
+      `, params)).rows : [],
       por_dieta: porDieta.rows,
       por_ubicacion: porUbicacion.rows,
       por_categoria: porCategoria.rows,
