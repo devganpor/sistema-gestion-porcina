@@ -70,8 +70,12 @@ const reportTypes: ReportConfig[] = [
 ];
 
 const fmt = (val: any, decimals = 2) => {
+  if (val === null || val === undefined) return '-';
+  // Si parece fecha (contiene '/' o '-' con formato de fecha), no convertir
+  if (typeof val === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(val)) return val;
+  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
   const n = parseFloat(val);
-  return isNaN(n) ? val ?? '-' : n.toFixed(decimals);
+  return isNaN(n) ? val : n.toFixed(decimals);
 };
 
 const ReportTable: React.FC<{ data: any[]; hideCols?: string[] }> = ({ data, hideCols = [] }) => {
